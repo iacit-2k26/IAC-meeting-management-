@@ -422,11 +422,6 @@ export async function createMeeting(payload) {
 
   await collection.insertOne({ ...nextMeeting, _id: nextMeeting.id });
 
-  // Send custom invitation emails via Gmail SMTP (replaces Zoom emails)
-  sendMeetingInvitations(nextMeeting, attendees).catch((err) =>
-    console.error("[createMeeting] Email send error:", err.message)
-  );
-
   return nextMeeting;
 }
 
@@ -500,11 +495,6 @@ export async function updateMeeting(meetingId, payload) {
   await collection.updateOne(
     { id: meetingId },
     { $set: { ...normalizedPayload, googleEventId: updatedMeeting.googleEventId } }
-  );
-
-  // Send update notification emails via Gmail SMTP
-  sendMeetingUpdateNotifications(updatedMeeting, attendees).catch((err) =>
-    console.error("[updateMeeting] Update email error:", err.message)
   );
 
   return updatedMeeting;
