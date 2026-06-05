@@ -45,7 +45,7 @@ export function formatDescription(text) {
     /.*is inviting you to a scheduled Zoom meeting\./gi,
     /Topic: .*/gi,
     /Time: .*/gi,
-    /Join Zoom Meeting\s+https?:\/\/\S+/gi,
+    /Join Zoom Meeting\s*https?:\/\/\S+/gi,
     /Meeting ID: \d+/gi,
     /Passcode: \w+/gi,
     /One tap mobile.*/gi,
@@ -62,7 +62,9 @@ export function formatDescription(text) {
     /Passcode: .*/gi,
     /.*--.*\+\d+.*/g,            // Broad catch for "Text -- +Number"
     /\+\d+[\d\s,]*#.*/g,         // Catch one-tap with #
-    /^\s*[\d\s\+\-\(\),]+$/gm,   // Lines that are only numbers and phone symbols
+    /^\s*[\d\s\+\-\(\),]{5,}$/gm, // Lines that are only numbers and phone symbols (min 5 chars to avoid stripping list numbers like "1)")
+    /^\s*[\(\)]\s*$/gm,          // Lines that only contain a single parenthesis
+    /^\s*[•·]\s*$/gm,            // Lines that only contain a bullet or middle dot
     /^Agenda\s*·\s*/gi,          // Strip "Agenda ·" prefix
     /^Agenda\s*:\s*/gi,          // Strip "Agenda:" prefix (handles spaces)
     /View meeting insights with Zoom AI Companion.*/gi,
@@ -77,7 +79,9 @@ export function formatDescription(text) {
     /United States.*/g,          // Usually part of dial-in lists
     /https?:\/\/(\w+\.)?zoom\.us\/\S+/gi, // Any remaining Zoom URLs
     /Microsoft Teams meeting.*/gi,
+    /Meeting chat link.*/gi,     // Catch "Meeting chat link"
     /________________________________________________________________________________/g,
+    /_{5,}/g,                    // Catch any line of 5 or more underscores
   ];
 
   boilerplatePatterns.forEach(pattern => {

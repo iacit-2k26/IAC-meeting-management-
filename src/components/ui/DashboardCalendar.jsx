@@ -154,6 +154,7 @@ function EventModal({ event, onClose }) {
   const dur  = durationLabel(event.start, event.end);
   const zoomRx = /https:\/\/[^\s<"]+zoom\.us\/j\/[^\s<"]+/;
   const zoomUrl = event.description?.match(zoomRx)?.[0];
+  const formattedAgenda = formatDescription(event.description);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -220,10 +221,10 @@ function EventModal({ event, onClose }) {
             )}
 
             {/* Description */}
-            {event.description && (
-              <div className="rounded-xl p-3 text-[13px] text-gray-600 leading-relaxed max-h-48 overflow-y-auto whitespace-pre-line border border-gray-100"
-                   style={{ background: "#f8f9fa" }}>
-                {formatDescription(event.description)}
+            {formattedAgenda && (
+              <div className="rounded-xl p-4 text-[13.5px] text-gray-700 leading-relaxed max-h-64 overflow-y-auto whitespace-pre-line border border-slate-100 shadow-sm"
+                   style={{ background: "#fcfcfd" }}>
+                {formattedAgenda}
               </div>
             )}
           </div>
