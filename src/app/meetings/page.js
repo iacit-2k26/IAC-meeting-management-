@@ -664,6 +664,7 @@ function AttendeesModal({ isOpen, onClose, meeting, employeeMap }) {
 
   const internalAttendees = meeting.internalAttendeeIds || [];
   const externalAttendees = meeting.externalAttendees || [];
+  const internalStatuses = meeting.internalAttendeeStatuses || {};
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -712,9 +713,29 @@ function AttendeesModal({ isOpen, onClose, meeting, employeeMap }) {
                             {employeeMap[id] || "Unknown Employee"}
                           </span>
                         </div>
-                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-600">
-                          Team
-                        </span>
+                        <div className="flex items-center gap-2">
+                          {internalStatuses[id] === "accepted" ? (
+                            <span className="flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-600">
+                              <CheckCircle2 size={10} /> Accepted
+                            </span>
+                          ) : internalStatuses[id] === "declined" ? (
+                            <span className="flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-600">
+                              <XCircle size={10} /> Declined
+                            </span>
+                          ) : internalStatuses[id] === "tentative" ? (
+                            <span className="flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-600">
+                              <HelpCircle size={10} /> Tentative
+                            </span>
+                          ) : internalStatuses[id] ? (
+                            <span className="flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">
+                              <Clock size={10} /> {internalStatuses[id] === "needsAction" ? "Awaiting" : internalStatuses[id]}
+                            </span>
+                          ) : (
+                            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-600">
+                              Team
+                            </span>
+                          )}
+                        </div>
                       </div>
                     ))
                   ) : (

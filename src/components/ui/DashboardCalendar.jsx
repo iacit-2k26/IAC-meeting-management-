@@ -14,33 +14,42 @@ const HOUR_PX     = 64; // height of one hour row in px (week view)
 const START_HOUR  = 0;  // show from midnight
 const END_HOUR    = 24;
 
-// Google Calendar colour palette (colorId 1–11 + default)
-const GCal_COLORS = {
-  default : "#1a73e8",
-  "1"     : "#a4bdfc", // lavender
-  "2"     : "#7ae7bf", // sage
-  "3"     : "#dbadff", // grape
-  "4"     : "#ff887c", // flamingo
-  "5"     : "#fbd75b", // banana
-  "6"     : "#ffb878", // tangerine
-  "7"     : "#46d6db", // peacock
-  "8"     : "#e1e1e1", // graphite
-  "9"     : "#5484ed", // blueberry
-  "10"    : "#51b749", // basil
-  "11"    : "#dc2127", // tomato
+// Professional limited colour palette
+const THEME_COLORS = {
+  blue   : "#2B3990", // Deeper corporate blue (matching system brand)
+  indigo : "#3F4E9F", // Slightly lighter indigo for contrast
+  slate  : "#475569", // Deeper slate for neutral events
 };
 
-// A deterministic colour from the event id for events without a colorId
-const EVENT_PALETTE = [
-  "#1a73e8","#0b8043","#e67c73","#f6bf26","#f4511e",
-  "#039be5","#616161","#3f51b5","#8e24aa","#d81b60",
-];
+// Map Google Calendar colorIds to our limited theme
+const GCal_COLORS = {
+  default : THEME_COLORS.blue,
+  "1"     : THEME_COLORS.indigo, // lavender -> indigo
+  "2"     : THEME_COLORS.blue,   // sage -> blue
+  "3"     : THEME_COLORS.indigo, // grape -> indigo
+  "4"     : THEME_COLORS.blue,   // flamingo -> blue
+  "5"     : THEME_COLORS.indigo, // banana -> indigo
+  "6"     : THEME_COLORS.blue,   // tangerine -> blue
+  "7"     : THEME_COLORS.indigo, // peacock -> indigo
+  "8"     : THEME_COLORS.slate,  // graphite -> slate
+  "9"     : THEME_COLORS.blue,   // blueberry -> blue
+  "10"    : THEME_COLORS.blue,   // basil -> blue
+  "11"    : THEME_COLORS.slate,  // tomato -> slate
+};
+
+// Simplified palette for events without colorId
+const EVENT_PALETTE = [THEME_COLORS.blue, THEME_COLORS.indigo];
+
 function hashColor(str = "") {
   let h = 0;
   for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) & 0xffffffff;
   return EVENT_PALETTE[Math.abs(h) % EVENT_PALETTE.length];
 }
+
 function eventColor(ev) {
+  // If it's a Zoom meeting or has a specific description, keep it blue
+  if (ev?.description?.includes("zoom.us")) return THEME_COLORS.blue;
+  // Otherwise use the mapped GCal colors or the simplified palette
   return GCal_COLORS[ev?.colorId] ?? hashColor(ev?.id ?? "");
 }
 
@@ -338,9 +347,9 @@ function MonthView({ year, month, events, onEventClick, onMoreClick }) {
                 const time = ev.isAllDay ? "" : fmt12(ev.start);
                 return (
                   <button key={ev.id} onClick={() => onEventClick(ev)}
-                    className="w-full text-left rounded-sm px-1.5 py-0.5 truncate text-[11.5px] font-medium text-white transition-opacity hover:opacity-85"
+                    className="w-full text-left rounded-md px-2 py-1 truncate text-[11px] font-semibold text-white transition-all hover:brightness-110 shadow-sm"
                     style={{ background: col }}>
-                    {time && <span className="opacity-80 mr-1">{time}</span>}
+                    {time && <span className="opacity-90 mr-1.5 font-bold">{time}</span>}
                     {ev.title}
                   </button>
                 );
@@ -659,20 +668,20 @@ export default function DashboardCalendar() {
         <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-gray-200">
           {/* Left: icon + title */}
           <div className="flex items-center gap-2">
-            <Calendar size={18} style={{ color:"#1a73e8" }} />
-            <span className="text-[15px] font-semibold text-gray-800">Google Calendar</span>
+            <Calendar size={18} style={{ color:"#2B3990" }} />
+            <span className="text-[15px] font-bold text-slate-800">Google Calendar</span>
           </div>
 
           {/* Right: controls */}
           <div className="flex items-center gap-2 flex-wrap justify-end">
             {/* View tabs */}
-            <div className="flex rounded-lg border border-gray-200 overflow-hidden text-[12px] font-medium">
+            <div className="flex rounded-lg border border-slate-200 overflow-hidden text-[12px] font-semibold shadow-sm">
               {["month","week","agenda"].map(v => (
                 <button key={v} onClick={() => setView(v)}
-                  className="px-3 py-1.5 transition-colors capitalize"
+                  className="px-4 py-1.5 transition-all capitalize"
                   style={{
-                    background : view===v ? "#1a73e8" : "#fff",
-                    color      : view===v ? "#fff"    : "#444",
+                    background : view===v ? "#2B3990" : "#fff",
+                    color      : view===v ? "#fff"    : "#475569",
                   }}>
                   {v}
                 </button>
@@ -681,21 +690,21 @@ export default function DashboardCalendar() {
 
             {/* Today */}
             <button onClick={goToday}
-              className="px-3 py-1.5 rounded-lg border border-gray-200 text-[12px] font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+              className="px-4 py-1.5 rounded-lg border border-slate-200 text-[12px] font-bold text-slate-600 hover:bg-slate-50 transition-all shadow-sm active:scale-95">
               Today
             </button>
 
             {/* Arrows + month label */}
             <div className="flex items-center gap-1">
               <button onClick={prev}
-                className="p-1.5 rounded-full hover:bg-gray-100 text-gray-500 transition-colors">
+                className="p-1.5 rounded-full hover:bg-slate-100 text-slate-500 transition-colors">
                 <ChevronLeft size={16} />
               </button>
-              <span className="text-[13px] font-semibold text-gray-700 min-w-[175px] text-center select-none">
+              <span className="text-[13px] font-bold text-slate-700 min-w-[175px] text-center select-none uppercase tracking-wide">
                 {headerLabel}
               </span>
               <button onClick={next}
-                className="p-1.5 rounded-full hover:bg-gray-100 text-gray-500 transition-colors">
+                className="p-1.5 rounded-full hover:bg-slate-100 text-slate-500 transition-colors">
                 <ChevronRight size={16} />
               </button>
             </div>

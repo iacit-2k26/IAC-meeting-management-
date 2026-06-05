@@ -1,6 +1,5 @@
 import { getDatabase } from "@/lib/mongodb";
 import { createZoomMeeting, deleteZoomMeeting, updateZoomMeeting } from "@/lib/zoom";
-import { sendMeetingInvitations, sendMeetingUpdateNotifications, sendMeetingCancellationNotifications } from "@/lib/mailer";
 import { createCalendarEvent, updateCalendarEvent, deleteCalendarEvent, listCalendarEvents } from "@/lib/googleCalendar";
 
 async function getCollection(collectionName) {
@@ -318,9 +317,21 @@ export async function listMeetings() {
 
         // Merge attendees: keep internal ones from DB, but update external ones from Google Calendar
         // Google Calendar is the source of truth for participant list and status
+        const internalStatuses = {};
+        (event.attendees || []).forEach(a => {
+          if (internalEmails.has(a.email.toLowerCase())) {
+            // Find which internal employee this is
+            const emp = allEmployees.find(e => e.email.toLowerCase() === a.email.toLowerCase());
+            if (emp) {
+              internalStatuses[emp.id] = a.responseStatus === "accepted" ? "accepted" : a.responseStatus || "invited";
+            }
+          }
+        });
+
         return {
           ...m,
           externalAttendees: gcalAttendees,
+          internalAttendeeStatuses: internalStatuses,
         };
       }
       return m;
@@ -333,6 +344,29 @@ export async function listMeetings() {
       const startTime = event.start?.dateTime || event.start?.date;
       const endTime = event.end?.dateTime || event.end?.date;
 
+      const internalAttendeeIds = [];
+      const internalStatuses = {};
+      const externalAttendees = [];
+
+      (event.attendees || []).forEach((a) => {
+        const email = a.email.toLowerCase();
+        const status = a.responseStatus === "accepted" ? "accepted" : a.responseStatus || "invited";
+        
+        if (internalEmails.has(email)) {
+          const emp = allEmployees.find(e => e.email.toLowerCase() === email);
+          if (emp) {
+            internalAttendeeIds.push(emp.id);
+            internalStatuses[emp.id] = status;
+          }
+        } else {
+          externalAttendees.push({
+            name: a.displayName || a.email,
+            email: a.email,
+            status: status,
+          });
+        }
+      });
+
       mergedMeetings.push({
         id: `gcal-${event.id}`,
         title: event.summary || "(No title)",
@@ -341,15 +375,9 @@ export async function listMeetings() {
         duration: endTime ? Math.round((new Date(endTime) - new Date(startTime)) / 60000) : 0,
         hostId: "external",
         departmentIds: [],
-        internalAttendeeIds: [],
-        externalAttendees: (event.attendees || [])
-          .map((a) => ({
-            name: a.displayName || a.email,
-            email: a.email,
-            status: a.responseStatus === "accepted" ? "accepted" : a.responseStatus || "invited",
-          }))
-          // Filter out internal employees from the external attendees list
-          .filter(a => !internalEmails.has(a.email.toLowerCase())),
+        internalAttendeeIds,
+        internalAttendeeStatuses: internalStatuses,
+        externalAttendees,
         status: getMeetingStatus(startTime, endTime),
         googleEventId: event.id,
         isVirtual: true,
@@ -529,11 +557,6 @@ export async function deleteMeeting(meetingId) {
   if (result.deletedCount === 0) {
     throw new Error("Meeting not found.");
   }
-
-  // Send cancellation emails via Gmail SMTP
-  sendMeetingCancellationNotifications(meeting, attendees).catch((err) =>
-    console.error("[deleteMeeting] Cancellation email error:", err.message)
-  );
 }
 
 function getMeetingStatus(startTime, endTime) {
