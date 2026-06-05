@@ -1,0 +1,433 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { BriefcaseBusiness, Building2, Pencil, Plus, Trash2, Users } from "lucide-react";
+import StatusBadge from "@/components/ui/StatusBadge";
+import DeleteConfirmationModal from "@/components/ui/DeleteConfirmationModal";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+
+const emptyForm = {
+  name: "",
+  code: "",
+  head: "",
+  status: "active",
+  description: "",
+};
+
+async function readResponse(response) {
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload.error || "Request failed.");
+  }
+
+  return payload.data;
+}
+
+export default function DepartmentsPage() {
+  const [departments, setDepartments] = useState([]);
+  const [employees, setEmployees] = useState([]);
+  const [query, setQuery] = useState("");
+  const [editingId, setEditingId] = useState(null);
+  const [form, setForm] = useState(emptyForm);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [feedback, setFeedback] = useState({ type: "", message: "" });
+
+  // Delete modal state
+  const [deleteModal, setDeleteModal] = useState({ isOpen: false, department: null, isDeleting: false });
+
+  const loadData = async () => {
+    try {
+      setIsLoading(true);
+      const [departmentResponse, employeeResponse] = await Promise.all([
+        fetch("/api/departments", { cache: "no-store" }),
+        fetch("/api/employees", { cache: "no-store" }),
+      ]);
+
+      const [departmentData, employeeData] = await Promise.all([
+        readResponse(departmentResponse),
+        readResponse(employeeResponse),
+      ]);
+
+      setDepartments(departmentData);
+      setEmployees(employeeData);
+    } catch (error) {
+      setFeedback({ type: "error", message: error.message });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    async function bootstrap() {
+      await loadData();
+    }
+
+    bootstrap();
+  }, []);
+
+  const employeesByDepartment = useMemo(() => {
+    return employees.reduce((accumulator, employee) => {
+      accumulator[employee.departmentId] = (accumulator[employee.departmentId] || 0) + 1;
+      return accumulator;
+    }, {});
+  }, [employees]);
+
+  const filteredDepartments = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) {
+      return departments;
+    }
+
+    return departments.filter((department) =>
+      [department.name, department.code, department.head, department.description]
+        .join(" ")
+        .toLowerCase()
+        .includes(normalizedQuery)
+    );
+  }, [departments, query]);
+
+  const startCreate = () => {
+    setEditingId(null);
+    setForm(emptyForm);
+    setFeedback({ type: "", message: "" });
+  };
+
+  const startEdit = (department) => {
+    setEditingId(department.id);
+    setForm({
+      name: department.name,
+      code: department.code,
+      head: department.head,
+      status: department.status,
+      description: department.description,
+    });
+    setFeedback({ type: "", message: "" });
+  };
+
+  const resetForm = () => {
+    setEditingId(null);
+    setForm(emptyForm);
+  };
+
+  const submitForm = async (event) => {
+    event.preventDefault();
+    setIsSubmitting(true);
+    setFeedback({ type: "", message: "" });
+
+    try {
+      const response = await fetch(editingId ? `/api/departments/${editingId}` : "/api/departments", {
+        method: editingId ? "PUT" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(form),
+      });
+
+      await readResponse(response);
+      await loadData();
+      resetForm();
+      setFeedback({
+        type: "success",
+        message: editingId ? "Department updated successfully." : "Department created successfully.",
+      });
+    } catch (error) {
+      setFeedback({ type: "error", message: error.message });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const removeDepartment = (department) => {
+    setDeleteModal({ isOpen: true, department, isDeleting: false });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteModal.department) return;
+
+    setDeleteModal((prev) => ({ ...prev, isDeleting: true }));
+    try {
+      const response = await fetch(`/api/departments/${deleteModal.department.id}`, { method: "DELETE" });
+      await readResponse(response);
+      await loadData();
+      if (editingId === deleteModal.department.id) {
+        resetForm();
+      }
+      setFeedback({ type: "success", message: "Department deleted successfully." });
+      setDeleteModal({ isOpen: false, department: null, isDeleting: false });
+    } catch (error) {
+      setFeedback({ type: "error", message: error.message });
+      setDeleteModal((prev) => ({ ...prev, isDeleting: false }));
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <section className="panel-surface p-5 sm:p-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#2B3990]">
+              Module 2
+            </p>
+            <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-slate-900">
+              Department Master
+            </h1>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+              Manage departments, assign heads, and control which teams are available for
+              meeting scheduling.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={startCreate}
+            className="inline-flex items-center gap-2 rounded-xl bg-[#2B3990] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#232f77]"
+          >
+            <Plus size={16} />
+            New department
+          </button>
+        </div>
+      </section>
+
+      <section className="grid gap-4 md:grid-cols-3">
+        <MetricCard icon={Building2} label="Total departments" value={departments.length} accent="#2B3990" />
+        <MetricCard
+          icon={Users}
+          label="Largest team"
+          value={departments.length > 0 ? Math.max(...departments.map((department) => employeesByDepartment[department.id] || 0)) : 0}
+          accent="#16a34a"
+        />
+        <MetricCard
+          icon={BriefcaseBusiness}
+          label="Active departments"
+          value={departments.filter((department) => department.status === "active").length}
+          accent="#7c3aed"
+        />
+      </section>
+
+      <section className="grid gap-6 xl:grid-cols-[0.9fr_1.4fr]">
+        <form onSubmit={submitForm} className="panel-surface p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">
+                {editingId ? "Edit department" : "Create department"}
+              </h2>
+              <p className="text-sm text-slate-500">Keep the organization structure current and searchable.</p>
+            </div>
+            {editingId && (
+              <button
+                type="button"
+                onClick={resetForm}
+                className="text-sm font-semibold text-slate-500 hover:text-slate-700"
+              >
+                Cancel edit
+              </button>
+            )}
+          </div>
+
+          {feedback.message && (
+            <div
+              className={`rounded-2xl border px-4 py-3 text-sm ${
+                feedback.type === "error"
+                  ? "border-red-200 bg-red-50 text-red-700"
+                  : "border-emerald-200 bg-emerald-50 text-emerald-700"
+              }`}
+            >
+              {feedback.message}
+            </div>
+          )}
+
+          <Field label="Department name">
+            <input
+              required
+              value={form.name}
+              onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+              className="input-base"
+            />
+          </Field>
+          <Field label="Department code">
+            <input
+              required
+              value={form.code}
+              onChange={(event) => setForm((current) => ({ ...current, code: event.target.value.toUpperCase() }))}
+              className="input-base"
+            />
+          </Field>
+          <Field label="Department head">
+            <input
+              value={form.head}
+              list="department-head-options"
+              onChange={(event) => setForm((current) => ({ ...current, head: event.target.value }))}
+              className="input-base"
+            />
+            <datalist id="department-head-options">
+              {employees.map((employee) => (
+                <option
+                  key={employee.id}
+                  value={`${employee.firstName} ${employee.lastName}`}
+                />
+              ))}
+            </datalist>
+          </Field>
+          <Field label="Status">
+            <select
+              value={form.status}
+              onChange={(event) => setForm((current) => ({ ...current, status: event.target.value }))}
+              className="input-base"
+            >
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </Field>
+          <Field label="Description">
+            <textarea
+              rows={5}
+              value={form.description}
+              onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
+              className="input-base"
+            />
+          </Field>
+
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="rounded-xl bg-[#2B3990] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#232f77] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isSubmitting ? "Saving..." : editingId ? "Update department" : "Create department"}
+          </button>
+        </form>
+
+        <section className="panel-surface p-5">
+          <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">Department directory</h2>
+              <p className="text-sm text-slate-500">Edit active teams and review linked headcount.</p>
+            </div>
+            <input
+              placeholder="Search by name, code, head, or description"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              className="input-base min-w-[260px]"
+            />
+          </div>
+
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Department</TableHead>
+                <TableHead>Code</TableHead>
+                <TableHead>Head</TableHead>
+                <TableHead>Employees</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center text-slate-500">
+                    Loading departments...
+                  </TableCell>
+                </TableRow>
+              ) : filteredDepartments.length > 0 ? (
+                filteredDepartments.map((department) => (
+                  <TableRow key={department.id}>
+                    <TableCell>
+                      <div>
+                        <p className="font-semibold text-slate-800">{department.name}</p>
+                        <p className="mt-1 text-xs text-slate-500">{department.description || "No description"}</p>
+                      </div>
+                    </TableCell>
+                    <TableCell>{department.code}</TableCell>
+                    <TableCell>{department.head || "—"}</TableCell>
+                    <TableCell>{employeesByDepartment[department.id] || 0}</TableCell>
+                    <TableCell>
+                      <StatusBadge
+                        status={department.status}
+                        color={department.status === "active" ? "#16a34a" : "#94a3b8"}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-2">
+                        <ActionButton icon={Pencil} label="Edit" onClick={() => startEdit(department)} />
+                        <ActionButton
+                          icon={Trash2}
+                          label="Delete"
+                          danger
+                          onClick={() => removeDepartment(department)}
+                        />
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center text-slate-500">
+                    No departments match the current search.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </section>
+      </section>
+
+      <DeleteConfirmationModal
+        isOpen={deleteModal.isOpen}
+        onClose={() => setDeleteModal({ isOpen: false, department: null, isDeleting: false })}
+        onConfirm={handleConfirmDelete}
+        isLoading={deleteModal.isDeleting}
+        title="Delete Department"
+        message={`Are you sure you want to delete the ${deleteModal.department?.name} department? This action cannot be undone.`}
+      />
+    </div>
+  );
+}
+
+function MetricCard({ icon: Icon, label, value, accent }) {
+  return (
+    <div className="panel-surface p-5">
+      <div className="flex items-center gap-3">
+        <Icon className="shrink-0" style={{ color: accent }} size={20} />
+        <div>
+          <p className="text-sm font-semibold text-slate-800">{label}</p>
+          <p className="text-xs text-slate-500">Live count from the current dataset.</p>
+        </div>
+      </div>
+      <p className="mt-4 text-3xl font-extrabold text-slate-900">{value}</p>
+    </div>
+  );
+}
+
+function Field({ label, children }) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-sm font-semibold text-slate-700">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function ActionButton({ icon: Icon, label, onClick, danger = false }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+        danger
+          ? "bg-red-50 text-red-600 hover:bg-red-100"
+          : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+      }`}
+    >
+      <Icon size={14} />
+      {label}
+    </button>
+  );
+}

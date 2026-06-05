@@ -1,0 +1,162 @@
+@import "tailwindcss";
+
+:root {
+  --dashboard-bg: #eaf1f7;
+  --dashboard-ink: #0f172a;
+  --panel-bg: #f7fbff;
+  --panel-border: #d7e3f0;
+}
+
+@theme inline {
+  --font-sans: var(--font-manrope);
+}
+
+body {
+  background:
+    radial-gradient(circle at 6% 10%, rgba(15, 118, 110, 0.08) 0%, transparent 28%),
+    radial-gradient(circle at 92% 2%, rgba(59, 130, 246, 0.08) 0%, transparent 25%),
+    linear-gradient(180deg, #eef4fa 0%, var(--dashboard-bg) 100%);
+  color: var(--dashboard-ink);
+  font-family: var(--font-manrope), system-ui, -apple-system, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+@layer utilities {
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+@layer components {
+  .panel-surface {
+    @apply rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-bg)] shadow-[0_10px_22px_rgba(15,23,42,0.06)];
+  }
+
+  .panel-surface-white {
+    @apply rounded-2xl border border-[var(--panel-border)] bg-white shadow-[0_10px_22px_rgba(15,23,42,0.06)];
+  }
+
+  .input-base {
+    @apply w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-[#2B3990] focus:ring-2 focus:ring-[#2B3990]/10;
+  }
+
+  .auth-card {
+    @apply bg-white/80 backdrop-blur-xl border border-white shadow-[0_8px_32px_0_rgba(31,38,135,0.07)];
+  }
+
+  .auth-input {
+    @apply w-full rounded-xl border border-slate-200 bg-white/50 px-4 py-3 text-sm text-slate-800 outline-none transition-all duration-200;
+    @apply focus:border-[#2B3990] focus:ring-4 focus:ring-[#2B3990]/10 focus:bg-white;
+    @apply placeholder:text-slate-400;
+  }
+
+  .auth-btn {
+    @apply relative overflow-hidden rounded-xl bg-[#2B3990] px-6 py-3.5 text-sm font-semibold text-white transition-all duration-300;
+    @apply hover:bg-[#1a235a] hover:shadow-lg hover:shadow-[#2B3990]/20 active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed disabled:active:scale-100;
+  }
+}
+
+/* ── Animations ── */
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-slide-up {
+  animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes float {
+  0%, 100% { transform: translate(0, 0); }
+  33% { transform: translate(10px, -15px); }
+  66% { transform: translate(-15px, 10px); }
+}
+.animate-float-slow { animation: float 12s ease-in-out infinite; }
+.animate-float-medium { animation: float 9s ease-in-out infinite; }
+.animate-float-fast { animation: float 7s ease-in-out infinite; }
+
+@keyframes stepIn {
+  from { opacity: 0.5; transform: translateX(100%); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.animate-step-in {
+  animation: stepIn 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out forwards;
+}
+
+@keyframes dropdown {
+  from { opacity: 0; transform: translateY(-8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.animate-dropdown {
+  animation: dropdown 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-fade-in-delayed {
+  animation: fadeIn 0.6s ease-out 0.3s forwards;
+  opacity: 0;
+}
+
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(43, 57, 144, 0.4); }
+  70% { box-shadow: 0 0 0 10px rgba(43, 57, 144, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(43, 57, 144, 0); }
+}
+.animate-pulse-slow {
+  animation: pulse 3s infinite;
+}
+
+@keyframes bounceSlow {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+.animate-bounce-slow {
+  animation: bounceSlow 3s ease-in-out infinite;
+}
+
+/* ── Custom Scrollbar ── */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 20px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}

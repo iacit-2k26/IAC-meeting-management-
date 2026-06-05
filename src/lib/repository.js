@@ -1,0 +1,548 @@
+import { getDatabase } from "@/lib/mongodb";
+import { createZoomMeeting, deleteZoomMeeting, updateZoomMeeting } from "@/lib/zoom";
+import { sendMeetingInvitations, sendMeetingUpdateNotifications, sendMeetingCancellationNotifications } from "@/lib/mailer";
+import { createCalendarEvent, updateCalendarEvent, deleteCalendarEvent, listCalendarEvents } from "@/lib/googleCalendar";
+
+async function getCollection(collectionName) {
+  const db = await getDatabase();
+  return db.collection(collectionName);
+}
+
+function buildId(prefix) {
+  return `${prefix}-${crypto.randomUUID().slice(0, 8)}`;
+}
+
+function dedupe(values = []) {
+  return Array.from(new Set(values.filter(Boolean)));
+}
+
+function normalizeEmployeePayload(payload = {}) {
+  return {
+    employeeId: String(payload.employeeId || "").trim(),
+    firstName: String(payload.firstName || "").trim(),
+    lastName: String(payload.lastName || "").trim(),
+    email: String(payload.email || "").trim().toLowerCase(),
+    designation: String(payload.designation || "").trim(),
+    departmentId: String(payload.departmentId || "").trim(),
+    role: String(payload.role || "user").trim(),
+    reportingTo: String(payload.reportingTo || "").trim(),
+    status: String(payload.status || "active").trim(),
+  };
+}
+
+function normalizeDepartmentPayload(payload = {}) {
+  return {
+    name: String(payload.name || "").trim(),
+    code: String(payload.code || "").trim().toUpperCase(),
+    head: String(payload.head || "").trim(),
+    status: String(payload.status || "active").trim(),
+    description: String(payload.description || "").trim(),
+  };
+}
+
+function normalizeExternalAttendees(externalAttendees = []) {
+  return (externalAttendees || [])
+    .map((attendee) => ({
+      name: String(attendee?.name || "").trim(),
+      email: String(attendee?.email || "").trim().toLowerCase(),
+      status: String(attendee?.status || "invited").trim(),
+    }))
+    .filter((attendee) => attendee.name && attendee.email);
+}
+
+function normalizeMeetingPayload(payload = {}) {
+  return {
+    title: String(payload.title || "").trim(),
+    agenda: String(payload.agenda || "").trim(),
+    scheduleDateTime: String(payload.scheduleDateTime || "").trim(),
+    duration: Number(payload.duration || 0),
+    hostId: String(payload.hostId || "").trim(),
+    departmentIds: dedupe((payload.departmentIds || []).map(String)),
+    internalAttendeeIds: dedupe((payload.internalAttendeeIds || []).map(String)),
+    externalAttendees: normalizeExternalAttendees(payload.externalAttendees),
+    status: String(payload.status || "upcoming").trim(),
+    zoomMeetingId: String(payload.zoomMeetingId || "").trim(),
+    zoomJoinUrl: String(payload.zoomJoinUrl || "").trim(),
+    zoomPassword: String(payload.zoomPassword || "").trim(),
+    // Google Calendar event ID — stored so we can update/delete later
+    googleEventId: String(payload.googleEventId || "").trim(),
+  };
+}
+
+function validateEmployeePayload(payload) {
+  if (!payload.employeeId || !payload.firstName || !payload.lastName || !payload.email) {
+    throw new Error("Employee ID, first name, last name, and email are required.");
+  }
+}
+
+function validateDepartmentPayload(payload) {
+  if (!payload.name || !payload.code) {
+    throw new Error("Department name and code are required.");
+  }
+}
+
+function validateMeetingPayload(payload) {
+  if (!payload.title || !payload.hostId || !payload.scheduleDateTime || !payload.duration) {
+    throw new Error("Meeting title, host, schedule, and duration are required.");
+  }
+}
+
+async function collectAttendeeDetails(internalAttendeeIds, externalAttendees) {
+  const employeesCollection = await getCollection("employees");
+  const internalAttendees = await employeesCollection
+    .find({ id: { $in: internalAttendeeIds } })
+    .toArray();
+
+  const details = [
+    ...internalAttendees.map((emp) => ({
+      email: emp.email,
+      firstName: emp.firstName,
+      lastName: emp.lastName,
+    })),
+    ...externalAttendees.map((ext) => ({
+      email: ext.email,
+      name: ext.name,
+    })),
+  ];
+
+  return details;
+}
+
+export async function listEmployees() {
+  const collection = await getCollection("employees");
+  return collection.find({}).toArray();
+}
+
+export async function getEmployee(employeeId) {
+  const collection = await getCollection("employees");
+  return collection.findOne({ id: employeeId });
+}
+
+export async function createEmployee(payload) {
+  const collection = await getCollection("employees");
+  const departments = await listDepartments();
+  const normalizedPayload = normalizeEmployeePayload(payload);
+
+  validateEmployeePayload(normalizedPayload);
+
+  if (!departments.some((department) => department.id === normalizedPayload.departmentId)) {
+    throw new Error("Selected department does not exist.");
+  }
+
+  if (await collection.findOne({ employeeId: normalizedPayload.employeeId })) {
+    throw new Error("Employee ID must be unique.");
+  }
+
+  if (await collection.findOne({ email: normalizedPayload.email })) {
+    throw new Error("Employee email must be unique.");
+  }
+
+  const nextEmployee = {
+    id: buildId("emp"),
+    ...normalizedPayload,
+  };
+
+  await collection.insertOne({ ...nextEmployee, _id: nextEmployee.id });
+  return nextEmployee;
+}
+
+export async function updateEmployee(employeeId, payload) {
+  const collection = await getCollection("employees");
+  const departments = await listDepartments();
+  const employee = await collection.findOne({ id: employeeId });
+
+  if (!employee) {
+    throw new Error("Employee not found.");
+  }
+
+  const normalizedPayload = normalizeEmployeePayload({
+    ...employee,
+    ...payload,
+  });
+
+  validateEmployeePayload(normalizedPayload);
+
+  if (!departments.some((department) => department.id === normalizedPayload.departmentId)) {
+    throw new Error("Selected department does not exist.");
+  }
+
+  if (await collection.findOne({ id: { $ne: employeeId }, employeeId: normalizedPayload.employeeId })) {
+    throw new Error("Employee ID must be unique.");
+  }
+
+  if (await collection.findOne({ id: { $ne: employeeId }, email: normalizedPayload.email })) {
+    throw new Error("Employee email must be unique.");
+  }
+
+  const updatedEmployee = {
+    ...employee,
+    ...normalizedPayload,
+  };
+
+  await collection.updateOne({ id: employeeId }, { $set: normalizedPayload });
+  return updatedEmployee;
+}
+
+export async function deleteEmployee(employeeId) {
+  const collection = await getCollection("employees");
+  const meetingsCollection = await getCollection("meetings");
+
+  if (await meetingsCollection.findOne({ hostId: employeeId })) {
+    throw new Error("This employee is assigned as a host on one or more meetings.");
+  }
+
+  const result = await collection.deleteOne({ id: employeeId });
+
+  if (result.deletedCount === 0) {
+    throw new Error("Employee not found.");
+  }
+
+  await meetingsCollection.updateMany(
+    {},
+    { $pull: { internalAttendeeIds: employeeId } }
+  );
+}
+
+export async function listDepartments() {
+  const collection = await getCollection("departments");
+  return collection.find({}).toArray();
+}
+
+export async function getDepartment(departmentId) {
+  const collection = await getCollection("departments");
+  return collection.findOne({ id: departmentId });
+}
+
+export async function createDepartment(payload) {
+  const collection = await getCollection("departments");
+  const normalizedPayload = normalizeDepartmentPayload(payload);
+
+  validateDepartmentPayload(normalizedPayload);
+
+  if (await collection.findOne({ code: normalizedPayload.code })) {
+    throw new Error("Department code must be unique.");
+  }
+
+  const nextDepartment = {
+    id: buildId("dep"),
+    ...normalizedPayload,
+  };
+
+  await collection.insertOne({ ...nextDepartment, _id: nextDepartment.id });
+  return nextDepartment;
+}
+
+export async function updateDepartment(departmentId, payload) {
+  const collection = await getCollection("departments");
+  const department = await collection.findOne({ id: departmentId });
+
+  if (!department) {
+    throw new Error("Department not found.");
+  }
+
+  const normalizedPayload = normalizeDepartmentPayload({
+    ...department,
+    ...payload,
+  });
+
+  validateDepartmentPayload(normalizedPayload);
+
+  if (await collection.findOne({ id: { $ne: departmentId }, code: normalizedPayload.code })) {
+    throw new Error("Department code must be unique.");
+  }
+
+  const updatedDepartment = {
+    ...department,
+    ...normalizedPayload,
+  };
+
+  await collection.updateOne({ id: departmentId }, { $set: normalizedPayload });
+  return updatedDepartment;
+}
+
+export async function deleteDepartment(departmentId) {
+  const collection = await getCollection("departments");
+  const employeesCollection = await getCollection("employees");
+  const meetingsCollection = await getCollection("meetings");
+
+  if (await employeesCollection.findOne({ departmentId: departmentId })) {
+    throw new Error("Cannot delete a department with linked employees.");
+  }
+
+  if (await meetingsCollection.findOne({ departmentIds: departmentId })) {
+    throw new Error("Cannot delete a department linked to meetings.");
+  }
+
+  const result = await collection.deleteOne({ id: departmentId });
+
+  if (result.deletedCount === 0) {
+    throw new Error("Department not found.");
+  }
+}
+
+export async function listMeetings() {
+  const collection = await getCollection("meetings");
+  const dbMeetings = await collection.find({}).toArray();
+
+  // Fetch Google Calendar events for a reasonable range (e.g., today +/- 30 days)
+  const timeMin = new Date();
+  timeMin.setDate(timeMin.getDate() - 30);
+  const timeMax = new Date();
+  timeMax.setDate(timeMax.getDate() + 30);
+
+  const calendarEvents = await listCalendarEvents(timeMin.toISOString(), timeMax.toISOString());
+
+  // Merge Google Calendar events with DB meetings
+  const dbGoogleEventIds = new Set(dbMeetings.map((m) => m.googleEventId).filter(Boolean));
+  const mergedMeetings = [...dbMeetings];
+
+  for (const event of calendarEvents) {
+    if (event.status === "cancelled") continue;
+
+    if (!dbGoogleEventIds.has(event.id)) {
+      const startTime = event.start?.dateTime || event.start?.date;
+      const endTime = event.end?.dateTime || event.end?.date;
+
+      mergedMeetings.push({
+        id: `gcal-${event.id}`,
+        title: event.summary || "(No title)",
+        agenda: event.description || "",
+        scheduleDateTime: startTime,
+        duration: endTime ? Math.round((new Date(endTime) - new Date(startTime)) / 60000) : 0,
+        hostId: "external",
+        departmentIds: [],
+        internalAttendeeIds: [],
+        externalAttendees: (event.attendees || []).map((a) => ({
+          name: a.displayName || a.email,
+          email: a.email,
+        })),
+        status: getMeetingStatus(startTime, endTime),
+        googleEventId: event.id,
+        isVirtual: true,
+      });
+    }
+  }
+
+  return mergedMeetings;
+}
+
+export async function getMeeting(meetingId) {
+  const collection = await getCollection("meetings");
+  return collection.findOne({ id: meetingId });
+}
+
+export async function createMeeting(payload) {
+  const collection = await getCollection("meetings");
+  const departmentsCollection = await getCollection("departments");
+  const employeesCollection = await getCollection("employees");
+  const normalizedPayload = normalizeMeetingPayload(payload);
+
+  validateMeetingPayload(normalizedPayload);
+
+  if (!(await employeesCollection.findOne({ id: normalizedPayload.hostId }))) {
+    throw new Error("Selected meeting host does not exist.");
+  }
+
+  for (const departmentId of normalizedPayload.departmentIds) {
+    if (!(await departmentsCollection.findOne({ id: departmentId }))) {
+      throw new Error("One or more selected departments do not exist.");
+    }
+  }
+
+  for (const attendeeId of normalizedPayload.internalAttendeeIds) {
+    if (!(await employeesCollection.findOne({ id: attendeeId }))) {
+      throw new Error("One or more internal attendees do not exist.");
+    }
+  }
+
+  const zoomMeeting = await createZoomMeeting({
+    topic: normalizedPayload.title,
+    agenda: normalizedPayload.agenda,
+    startTime: normalizedPayload.scheduleDateTime,
+    duration: normalizedPayload.duration,
+  });
+
+  // Collect all attendee details (internal employees + external guests)
+  const attendees = await collectAttendeeDetails(
+    normalizedPayload.internalAttendeeIds,
+    normalizedPayload.externalAttendees
+  );
+
+  // Build the partial meeting object needed for emails/calendar before DB insert
+  const partialMeeting = {
+    ...normalizedPayload,
+    zoomMeetingId: zoomMeeting.id,
+    zoomJoinUrl: zoomMeeting.joinUrl,
+    zoomPassword: zoomMeeting.password,
+  };
+
+  // Create Google Calendar event — sends invites to all attendees' Google Calendars
+  const googleEventId = await createCalendarEvent(partialMeeting, attendees);
+
+  const nextMeeting = {
+    id: buildId("mtg"),
+    ...partialMeeting,
+    googleEventId: googleEventId || "",
+  };
+
+  await collection.insertOne({ ...nextMeeting, _id: nextMeeting.id });
+
+  // Send custom invitation emails via Gmail SMTP (replaces Zoom emails)
+  sendMeetingInvitations(nextMeeting, attendees).catch((err) =>
+    console.error("[createMeeting] Email send error:", err.message)
+  );
+
+  return nextMeeting;
+}
+
+export async function updateMeeting(meetingId, payload) {
+  const collection = await getCollection("meetings");
+  const departmentsCollection = await getCollection("departments");
+  const employeesCollection = await getCollection("employees");
+  const meeting = await collection.findOne({ id: meetingId });
+
+  if (!meeting) {
+    throw new Error("Meeting not found.");
+  }
+
+  const normalizedPayload = normalizeMeetingPayload({
+    ...meeting,
+    ...payload,
+  });
+
+  validateMeetingPayload(normalizedPayload);
+
+  if (!(await employeesCollection.findOne({ id: normalizedPayload.hostId }))) {
+    throw new Error("Selected meeting host does not exist.");
+  }
+
+  for (const departmentId of normalizedPayload.departmentIds) {
+    if (!(await departmentsCollection.findOne({ id: departmentId }))) {
+      throw new Error("One or more selected departments do not exist.");
+    }
+  }
+
+  for (const attendeeId of normalizedPayload.internalAttendeeIds) {
+    if (!(await employeesCollection.findOne({ id: attendeeId }))) {
+      throw new Error("One or more internal attendees do not exist.");
+    }
+  }
+
+  if (meeting.zoomMeetingId) {
+    await updateZoomMeeting(meeting.zoomMeetingId, {
+      topic: normalizedPayload.title,
+      agenda: normalizedPayload.agenda,
+      startTime: normalizedPayload.scheduleDateTime,
+      duration: normalizedPayload.duration,
+    });
+  }
+
+  // Collect updated attendee list
+  const attendees = await collectAttendeeDetails(
+    normalizedPayload.internalAttendeeIds,
+    normalizedPayload.externalAttendees
+  );
+
+  // Build the updated meeting object for calendar/email (includes zoom fields)
+  const updatedPartial = {
+    ...meeting,
+    ...normalizedPayload,
+  };
+
+  // Update the Google Calendar event and re-send invites to all attendees
+  const updatedGoogleEventId = await updateCalendarEvent(
+    meeting.googleEventId || null,
+    updatedPartial,
+    attendees
+  );
+
+  const updatedMeeting = {
+    ...updatedPartial,
+    googleEventId: updatedGoogleEventId || meeting.googleEventId || "",
+  };
+
+  // Persist update (include googleEventId in case it changed)
+  await collection.updateOne(
+    { id: meetingId },
+    { $set: { ...normalizedPayload, googleEventId: updatedMeeting.googleEventId } }
+  );
+
+  // Send update notification emails via Gmail SMTP
+  sendMeetingUpdateNotifications(updatedMeeting, attendees).catch((err) =>
+    console.error("[updateMeeting] Update email error:", err.message)
+  );
+
+  return updatedMeeting;
+}
+
+export async function deleteMeeting(meetingId) {
+  const collection = await getCollection("meetings");
+  const meeting = await collection.findOne({ id: meetingId });
+
+  if (!meeting) {
+    throw new Error("Meeting not found.");
+  }
+
+  // Collect all attendees so we can send cancellation emails
+  const attendees = await collectAttendeeDetails(
+    meeting.internalAttendeeIds || [],
+    meeting.externalAttendees || []
+  );
+
+  // Delete Zoom meeting
+  if (meeting.zoomMeetingId) {
+    await deleteZoomMeeting(meeting.zoomMeetingId);
+  }
+
+  // Delete Google Calendar event (notifies attendees of cancellation)
+  if (meeting.googleEventId) {
+    await deleteCalendarEvent(meeting.googleEventId);
+  }
+
+  const result = await collection.deleteOne({ id: meetingId });
+
+  if (result.deletedCount === 0) {
+    throw new Error("Meeting not found.");
+  }
+
+  // Send cancellation emails via Gmail SMTP
+  sendMeetingCancellationNotifications(meeting, attendees).catch((err) =>
+    console.error("[deleteMeeting] Cancellation email error:", err.message)
+  );
+}
+
+function getMeetingStatus(startTime, endTime) {
+  const now = new Date();
+  const start = new Date(startTime);
+  const end = new Date(endTime);
+
+  if (now >= start && now <= end) {
+    return "ongoing";
+  } else if (now < start) {
+    return "upcoming";
+  } else {
+    return "completed";
+  }
+}
+
+export async function getDashboardData() {
+  const [employees, departments, meetings] = await Promise.all([
+    listEmployees(),
+    listDepartments(),
+    listMeetings(),
+  ]);
+
+  return {
+    employees,
+    departments,
+    meetings,
+    metrics: {
+      activeEmployees: employees.filter((employee) => employee.status === "active").length,
+      departments: departments.length,
+      upcomingMeetings: meetings.filter((meeting) => meeting.status === "upcoming").length,
+      ongoingMeetings: meetings.filter((meeting) => meeting.status === "ongoing").length,
+      completedMeetings: meetings.filter((meeting) => meeting.status === "completed").length,
+    },
+  };
+}
+
