@@ -5,6 +5,7 @@ import {
   ChevronLeft, ChevronRight, X, Video, MapPin, Users,
   Clock, ExternalLink, Calendar, RefreshCw,
 } from "lucide-react";
+import { formatDescription } from "@/lib/formatters";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const DAYS_SHORT  = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -211,9 +212,9 @@ function EventModal({ event, onClose }) {
 
             {/* Description */}
             {event.description && (
-              <div className="rounded-xl p-3 text-[13px] text-gray-600 leading-relaxed max-h-36 overflow-y-auto whitespace-pre-line"
+              <div className="rounded-xl p-3 text-[13px] text-gray-600 leading-relaxed max-h-48 overflow-y-auto whitespace-pre-line border border-gray-100"
                    style={{ background: "#f8f9fa" }}>
-                {event.description.replace(/https?:\/\/[^\s]+/g, "").trim()}
+                {formatDescription(event.description)}
               </div>
             )}
           </div>
@@ -240,8 +241,51 @@ function EventModal({ event, onClose }) {
   );
 }
 
+// ─── Day Events Modal ────────────────────────────────────────────────────────
+function DayEventsModal({ date, events, onEventClick, onClose }) {
+  const ref = useRef();
+  const dStr = date?.toLocaleDateString("en-IN", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+
+  useEffect(() => {
+    const fn = e => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
+    document.addEventListener("mousedown", fn);
+    return () => document.removeEventListener("mousedown", fn);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+         style={{ background: "rgba(0,0,0,0.35)", backdropFilter: "blur(4px)" }}>
+      <div ref={ref} className="w-full max-w-sm rounded-2xl overflow-hidden animate-slide-up bg-white shadow-2xl">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <h2 className="text-sm font-bold text-gray-800 uppercase tracking-wide">{dStr}</h2>
+          <button onClick={onClose} className="p-1 rounded-full text-gray-400 hover:bg-gray-100 transition-colors">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="max-h-[400px] overflow-y-auto">
+          {events.map(ev => {
+            const col = eventColor(ev);
+            return (
+              <button key={ev.id} onClick={() => { onEventClick(ev); onClose(); }}
+                className="w-full text-left flex items-start gap-3 px-5 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0">
+                <div className="w-2.5 h-2.5 rounded-sm mt-1 shrink-0" style={{ background: col }} />
+                <div className="min-w-0">
+                  <p className="text-[13px] font-semibold text-gray-800 truncate">{ev.title}</p>
+                  <p className="text-[11px] text-gray-500 mt-0.5">
+                    {ev.isAllDay ? "All day" : `${fmt12(ev.start)} – ${fmt12(ev.end)}`}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Month View ───────────────────────────────────────────────────────────────
-function MonthView({ year, month, events, onEventClick }) {
+function MonthView({ year, month, events, onEventClick, onMoreClick }) {
   const today = new Date();
   const grid  = buildGrid(year, month);
   const MAX   = 3;
@@ -302,7 +346,7 @@ function MonthView({ year, month, events, onEventClick }) {
                 );
               })}
               {overflow > 0 && (
-                <button onClick={() => onEventClick(evs[MAX])}
+                <button onClick={() => onMoreClick(cell.date, evs)}
                   className="text-[11px] font-medium text-gray-500 hover:text-blue-600 text-left pl-1">
                   +{overflow} more
                 </button>
@@ -554,6 +598,7 @@ export default function DashboardCalendar() {
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState(null);
   const [selected,  setSelected]  = useState(null);
+  const [dayEvents, setDayEvents] = useState(null); // { date, events }
 
   const fetchEvents = useCallback(async (date) => {
     setLoading(true); setError(null);
@@ -683,6 +728,7 @@ export default function DashboardCalendar() {
             month={viewDate.getMonth()}
             events={events}
             onEventClick={setSelected}
+            onMoreClick={(date, evs) => setDayEvents({ date, events: evs })}
           />
         ) : view === "week" ? (
           <WeekView
@@ -697,6 +743,15 @@ export default function DashboardCalendar() {
 
       {selected && (
         <EventModal event={selected} onClose={() => setSelected(null)} />
+      )}
+
+      {dayEvents && (
+        <DayEventsModal
+          date={dayEvents.date}
+          events={dayEvents.events}
+          onEventClick={setSelected}
+          onClose={() => setDayEvents(null)}
+        />
       )}
     </>
   );

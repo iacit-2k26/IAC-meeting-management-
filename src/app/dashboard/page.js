@@ -18,7 +18,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import DashboardCalendar from "@/components/ui/DashboardCalendar";
+import RefreshButton from "@/components/ui/RefreshButton";
 import { getDashboardData } from "@/lib/repository";
+import { formatDescription } from "@/lib/formatters";
 
 const statusColors = {
   upcoming: "#2563eb",
@@ -94,20 +96,23 @@ export default async function DashboardPage() {
             </p>
           </div>
 
-          {/* <div className="flex flex-wrap gap-3">
-            <Link
-              href="/meetings"
-              className="rounded-xl bg-[#2B3990] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#232f77]"
-            >
-              Review meetings
-            </Link>
-            <Link
-              href="/employees"
-              className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
-            >
-              View employees
-            </Link>
-          </div> */}
+          <div className="flex items-center gap-3">
+            <RefreshButton />
+            {/* <div className="flex flex-wrap gap-3">
+              <Link
+                href="/meetings"
+                className="rounded-xl bg-[#2B3990] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#232f77]"
+              >
+                Review meetings
+              </Link>
+              <Link
+                href="/employees"
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+              >
+                Manage team
+              </Link>
+            </div> */}
+          </div>
         </div>
       </section>
 
@@ -168,7 +173,9 @@ export default async function DashboardPage() {
                           {meeting.title}
                         </Link>
                       )}
-                      <p className="mt-1 max-w-md text-xs text-slate-500">{meeting.agenda || "No agenda"}</p>
+                      <p className="mt-1 max-w-md truncate text-xs text-slate-500">
+                        {formatDescription(meeting.agenda) || "No agenda"}
+                      </p>
                     </div>
                   </TableCell>
                   <TableCell>

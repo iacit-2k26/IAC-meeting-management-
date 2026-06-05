@@ -15,7 +15,6 @@ import {
 
 const emptyForm = {
   name: "",
-  code: "",
   head: "",
   status: "active",
   description: "",
@@ -87,7 +86,7 @@ export default function DepartmentsPage() {
     }
 
     return departments.filter((department) =>
-      [department.name, department.code, department.head, department.description]
+      [department.name, department.head, department.description]
         .join(" ")
         .toLowerCase()
         .includes(normalizedQuery)
@@ -104,7 +103,6 @@ export default function DepartmentsPage() {
     setEditingId(department.id);
     setForm({
       name: department.name,
-      code: department.code,
       head: department.head,
       status: department.status,
       description: department.description,
@@ -170,7 +168,7 @@ export default function DepartmentsPage() {
 
   return (
     <div className="space-y-6">
-      <section className="panel-surface p-5 sm:p-6">
+      <section className="-ml-5 p-5 sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#2B3990]">
@@ -252,14 +250,6 @@ export default function DepartmentsPage() {
               className="input-base"
             />
           </Field>
-          <Field label="Department code">
-            <input
-              required
-              value={form.code}
-              onChange={(event) => setForm((current) => ({ ...current, code: event.target.value.toUpperCase() }))}
-              className="input-base"
-            />
-          </Field>
           <Field label="Department head">
             <input
               value={form.head}
@@ -311,7 +301,7 @@ export default function DepartmentsPage() {
               <p className="text-sm text-slate-500">Edit active teams and review linked headcount.</p>
             </div>
             <input
-              placeholder="Search by name, code, head, or description"
+              placeholder="Search by name, head, or description"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               className="input-base min-w-[260px]"
@@ -322,7 +312,6 @@ export default function DepartmentsPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Department</TableHead>
-                <TableHead>Code</TableHead>
                 <TableHead>Head</TableHead>
                 <TableHead>Employees</TableHead>
                 <TableHead>Status</TableHead>
@@ -332,7 +321,7 @@ export default function DepartmentsPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-slate-500">
+                  <TableCell colSpan={5} className="text-center text-slate-500">
                     Loading departments...
                   </TableCell>
                 </TableRow>
@@ -345,7 +334,6 @@ export default function DepartmentsPage() {
                         <p className="mt-1 text-xs text-slate-500">{department.description || "No description"}</p>
                       </div>
                     </TableCell>
-                    <TableCell>{department.code}</TableCell>
                     <TableCell>{department.head || "—"}</TableCell>
                     <TableCell>{employeesByDepartment[department.id] || 0}</TableCell>
                     <TableCell>
@@ -369,7 +357,7 @@ export default function DepartmentsPage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-slate-500">
+                  <TableCell colSpan={5} className="text-center text-slate-500">
                     No departments match the current search.
                   </TableCell>
                 </TableRow>

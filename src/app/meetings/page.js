@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Calendar, CalendarDays, Clock3, Pencil, Plus, Trash2, UsersRound, Video } from "lucide-react";
+import { Calendar, CalendarDays, CheckCircle2, Clock, Clock3, ExternalLink, HelpCircle, Mail, Pencil, Plus, RefreshCw, Trash2, User, UsersRound, Video, X, XCircle } from "lucide-react";
 import StatusBadge from "@/components/ui/StatusBadge";
 import DeleteConfirmationModal from "@/components/ui/DeleteConfirmationModal";
+import { formatDescription, stripNewlines } from "@/lib/formatters";
 import {
   Table,
   TableBody,
@@ -55,7 +56,17 @@ function parseExternalAttendees(text) {
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => {
-      const [name = "", email = "", status = "invited"] = line.split(",").map((part) => part.trim());
+      const parts = line.split(",").map((part) => part.trim());
+      
+      // If only an email is provided (no commas)
+      if (parts.length === 1 && parts[0].includes("@")) {
+        const email = parts[0];
+        // Use the part before @ as a temporary name
+        const name = email.split("@")[0].replace(/[._-]/g, " ");
+        return { name, email, status: "invited" };
+      }
+
+      const [name = "", email = "", status = "invited"] = parts;
       return { name, email, status: status || "invited" };
     })
     .filter((attendee) => attendee.name && attendee.email);
@@ -72,6 +83,10 @@ export default function MeetingsPage() {
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [query, setQuery] = useState("");
+  const [dateRange, setDateRange] = useState({
+    start: new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split("T")[0],
+    end: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString().split("T")[0],
+  });
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -80,6 +95,8 @@ export default function MeetingsPage() {
 
   // Delete modal state
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, meeting: null, isDeleting: false });
+  // Attendees modal state
+  const [attendeesModal, setAttendeesModal] = useState({ isOpen: false, meeting: null });
 
   const loadData = async () => {
     try {
@@ -129,12 +146,18 @@ export default function MeetingsPage() {
 
   const filteredMeetings = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    if (!normalizedQuery) {
-      return meetings;
-    }
+    
+    return meetings.filter((meeting) => {
+      // 1. Date Range Filter
+      const meetingDate = new Date(meeting.scheduleDateTime).toISOString().split("T")[0];
+      const isWithinDateRange = meetingDate >= dateRange.start && meetingDate <= dateRange.end;
+      
+      if (!isWithinDateRange) return false;
 
-    return meetings.filter((meeting) =>
-      [
+      // 2. Search Query Filter
+      if (!normalizedQuery) return true;
+
+      return [
         meeting.title,
         meeting.agenda,
         meeting.zoomMeetingId,
@@ -143,9 +166,9 @@ export default function MeetingsPage() {
       ]
         .join(" ")
         .toLowerCase()
-        .includes(normalizedQuery)
-    );
-  }, [meetings, query, employeeMap, departmentMap]);
+        .includes(normalizedQuery);
+    });
+  }, [meetings, query, dateRange, employeeMap, departmentMap]);
 
   const startCreate = () => {
     setEditingId(null);
@@ -278,7 +301,7 @@ export default function MeetingsPage() {
 
   return (
     <div className="space-y-6">
-      <section className="panel-surface p-5 sm:p-6">
+      <section className="-ml-5 p-5 sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#2B3990]">
@@ -292,29 +315,40 @@ export default function MeetingsPage() {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={startCreate}
-            className="inline-flex items-center gap-2 rounded-xl bg-[#2B3990] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#232f77]"
-          >
-            <Plus size={16} />
-            New meeting
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={loadData}
+              disabled={isLoading}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50"
+            >
+              <RefreshCw size={16} className={isLoading ? "animate-spin" : ""} />
+              Refresh
+            </button>
+            <button
+              type="button"
+              onClick={startCreate}
+              className="inline-flex items-center gap-2 rounded-xl bg-[#2B3990] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#232f77]"
+            >
+              <Plus size={16} />
+              New meeting
+            </button>
+          </div>
         </div>
       </section>
 
       <section className="grid gap-4 md:grid-cols-3">
-        <MetricCard icon={Video} label="Total meetings" value={meetings.length} accent="#2B3990" />
+        <MetricCard icon={Video} label="Total meetings" value={filteredMeetings.length} accent="#2B3990" />
         <MetricCard
           icon={CalendarDays}
           label="Upcoming meetings"
-          value={meetings.filter((meeting) => meeting.status === "upcoming").length}
+          value={filteredMeetings.filter((meeting) => meeting.status === "upcoming").length}
           accent="#ea580c"
         />
         <MetricCard
           icon={Clock3}
           label="Live meetings"
-          value={meetings.filter((meeting) => meeting.status === "ongoing").length}
+          value={filteredMeetings.filter((meeting) => meeting.status === "ongoing").length}
           accent="#16a34a"
         />
       </section>
@@ -458,28 +492,48 @@ export default function MeetingsPage() {
         </form>
 
         <section className="panel-surface p-5">
-          <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900">Meeting registry</h2>
-              <p className="text-sm text-slate-500">Review meetings, open details, edit scheduling, or remove entries.</p>
+          <div className="mb-6 flex flex-col gap-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">Meeting registry</h2>
+                <p className="text-sm text-slate-500">Review meetings, open details, edit scheduling, or remove entries.</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-1.5">
+                  <Calendar size={16} className="text-slate-400" />
+                  <input
+                    type="date"
+                    value={dateRange.start}
+                    onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+                    className="bg-transparent text-sm font-medium text-slate-700 focus:outline-none"
+                  />
+                  <span className="text-slate-400">to</span>
+                  <input
+                    type="date"
+                    value={dateRange.end}
+                    onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+                    className="bg-transparent text-sm font-medium text-slate-700 focus:outline-none"
+                  />
+                </div>
+                <input
+                  placeholder="Search by title, host, department, or Zoom ID"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  className="input-base min-w-[260px]"
+                />
+              </div>
             </div>
-            <input
-              placeholder="Search by title, host, department, or Zoom ID"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              className="input-base min-w-[260px]"
-            />
           </div>
 
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Meeting</TableHead>
-                <TableHead>Host</TableHead>
-                <TableHead>Attendees</TableHead>
-                <TableHead>Schedule</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Actions</TableHead>
+                <TableHead className="w-[35%]">Meeting</TableHead>
+                <TableHead className="w-[15%]">Host</TableHead>
+                <TableHead className="w-[10%]">Attendees</TableHead>
+                <TableHead className="w-[15%]">Schedule</TableHead>
+                <TableHead className="w-[12%]">Status</TableHead>
+                <TableHead className="w-[13%]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -492,8 +546,8 @@ export default function MeetingsPage() {
               ) : filteredMeetings.length > 0 ? (
                 filteredMeetings.map((meeting) => (
                   <TableRow key={meeting.id}>
-                    <TableCell>
-                      <div>
+                    <TableCell className="max-w-[300px]">
+                      <div className="flex flex-col gap-1">
                         {meeting.isVirtual ? (
                           <span className="font-semibold text-slate-800">
                             {meeting.title}
@@ -506,19 +560,24 @@ export default function MeetingsPage() {
                             {meeting.title}
                           </Link>
                         )}
-                        <p className="mt-1 text-xs text-slate-500">{meeting.agenda || "No agenda"}</p>
-                        <div className="mt-2 flex flex-wrap gap-1.5">
+                        <div
+                          className="mt-1 text-xs text-slate-500 whitespace-pre-line"
+                          title={formatDescription(meeting.agenda)}
+                        >
+                          {formatDescription(meeting.agenda) || "No agenda"}
+                        </div>
+                        <div className="mt-1 flex flex-wrap gap-1.5">
                           {meeting.departmentIds.length > 0 ? (
                             meeting.departmentIds.map((departmentId) => (
                               <span
                                 key={departmentId}
-                                className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600"
+                                className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600"
                               >
                                 {departmentMap[departmentId] ?? "Unknown"}
                               </span>
                             ))
                           ) : (
-                            <span className="text-xs text-slate-400 italic">No departments</span>
+                            <span className="text-[10px] text-slate-400 italic">No departments</span>
                           )}
                         </div>
                       </div>
@@ -533,10 +592,17 @@ export default function MeetingsPage() {
                       )}
                     </TableCell>
                     <TableCell>
-                      <div className="inline-flex items-center gap-1.5 text-sm text-slate-700">
+                      <button
+                        type="button"
+                        onClick={() => setAttendeesModal({ isOpen: true, meeting })}
+                        className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm text-slate-700 transition hover:bg-slate-100 hover:text-[#2B3990]"
+                        title="View attendees list"
+                      >
                         <UsersRound size={14} className="text-slate-400" />
-                        <span>{meeting.internalAttendeeIds?.length + meeting.externalAttendees?.length || 0}</span>
-                      </div>
+                        <span className="font-medium">
+                          {(meeting.internalAttendeeIds?.length || 0) + (meeting.externalAttendees?.length || 0)}
+                        </span>
+                      </button>
                     </TableCell>
                     <TableCell>{formatDateTime(meeting.scheduleDateTime)}</TableCell>
                     <TableCell>
@@ -582,6 +648,142 @@ export default function MeetingsPage() {
         title="Delete Meeting"
         message={`Are you sure you want to delete "${deleteModal.meeting?.title}"? This will also cancel the meeting on Zoom and cannot be undone.`}
       />
+
+      <AttendeesModal
+        isOpen={attendeesModal.isOpen}
+        onClose={() => setAttendeesModal({ isOpen: false, meeting: null })}
+        meeting={attendeesModal.meeting}
+        employeeMap={employeeMap}
+      />
+    </div>
+  );
+}
+
+function AttendeesModal({ isOpen, onClose, meeting, employeeMap }) {
+  if (!isOpen || !meeting) return null;
+
+  const internalAttendees = meeting.internalAttendeeIds || [];
+  const externalAttendees = meeting.externalAttendees || [];
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <div
+        className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200"
+        onClick={onClose}
+      />
+      <div className="relative w-full max-w-lg scale-100 animate-in zoom-in-95 duration-200">
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+          <div className="border-b border-slate-100 bg-slate-50/50 px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Meeting Participants</h3>
+                <p className="text-sm text-slate-500 truncate max-w-[300px]">{meeting.title}</p>
+              </div>
+              <button
+                onClick={onClose}
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-500 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+          </div>
+
+          <div className="max-h-[60vh] overflow-y-auto p-6">
+            <div className="space-y-6">
+              {/* Internal Attendees */}
+              <div>
+                <div className="mb-3 flex items-center gap-2">
+                  <div className="rounded-md bg-blue-50 p-1 text-blue-600">
+                    <User size={16} />
+                  </div>
+                  <h4 className="text-sm font-bold uppercase tracking-wider text-slate-700">
+                    Internal Team ({internalAttendees.length})
+                  </h4>
+                </div>
+                <div className="space-y-2">
+                  {internalAttendees.length > 0 ? (
+                    internalAttendees.map((id) => (
+                      <div key={id} className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/30 p-3">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700">
+                            {(employeeMap[id] || "U").split(" ").map(n => n[0]).join("")}
+                          </div>
+                          <span className="text-sm font-medium text-slate-700">
+                            {employeeMap[id] || "Unknown Employee"}
+                          </span>
+                        </div>
+                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-600">
+                          Team
+                        </span>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm italic text-slate-400">No internal attendees listed.</p>
+                  )}
+                </div>
+              </div>
+
+              {/* External Attendees */}
+              <div>
+                <div className="mb-3 flex items-center gap-2">
+                  <div className="rounded-md bg-purple-50 p-1 text-purple-600">
+                    <Mail size={16} />
+                  </div>
+                  <h4 className="text-sm font-bold uppercase tracking-wider text-slate-700">
+                    External Guests ({externalAttendees.length})
+                  </h4>
+                </div>
+                <div className="space-y-2">
+                  {externalAttendees.length > 0 ? (
+                    externalAttendees.map((guest, index) => (
+                      <div key={index} className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/30 p-3">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-sm font-medium text-slate-700">{guest.name}</span>
+                          <span className="text-xs text-slate-500">{guest.email}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {guest.status === "accepted" ? (
+                            <span className="flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-600">
+                              <CheckCircle2 size={10} /> Accepted
+                            </span>
+                          ) : guest.status === "declined" ? (
+                            <span className="flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-600">
+                              <XCircle size={10} /> Declined
+                            </span>
+                          ) : guest.status === "tentative" ? (
+                            <span className="flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-600">
+                              <HelpCircle size={10} /> Tentative
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">
+                              <Clock size={10} /> {guest.status === "needsAction" ? "Awaiting" : guest.status || "Invited"}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm italic text-slate-400">No external guests listed.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-slate-50 px-6 py-4 border-t border-slate-100 flex justify-between items-center">
+            <p className="text-xs text-slate-500">
+              Total: {(internalAttendees.length + externalAttendees.length)} participants
+            </p>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl bg-white border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm transition hover:bg-slate-50"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -593,7 +795,7 @@ function MetricCard({ icon: Icon, label, value, accent }) {
         <Icon className="shrink-0" style={{ color: accent }} size={20} />
         <div>
           <p className="text-sm font-semibold text-slate-800">{label}</p>
-          <p className="text-xs text-slate-500">Live count from the current meeting registry.</p>
+          <p className="text-xs text-slate-500">Based on current registry filters.</p>
         </div>
       </div>
       <p className="mt-4 text-3xl font-extrabold text-slate-900">{value}</p>

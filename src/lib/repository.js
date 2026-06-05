@@ -24,7 +24,6 @@ function normalizeEmployeePayload(payload = {}) {
     email: String(payload.email || "").trim().toLowerCase(),
     designation: String(payload.designation || "").trim(),
     departmentId: String(payload.departmentId || "").trim(),
-    role: String(payload.role || "user").trim(),
     reportingTo: String(payload.reportingTo || "").trim(),
     status: String(payload.status || "active").trim(),
   };
@@ -33,7 +32,6 @@ function normalizeEmployeePayload(payload = {}) {
 function normalizeDepartmentPayload(payload = {}) {
   return {
     name: String(payload.name || "").trim(),
-    code: String(payload.code || "").trim().toUpperCase(),
     head: String(payload.head || "").trim(),
     status: String(payload.status || "active").trim(),
     description: String(payload.description || "").trim(),
@@ -76,8 +74,8 @@ function validateEmployeePayload(payload) {
 }
 
 function validateDepartmentPayload(payload) {
-  if (!payload.name || !payload.code) {
-    throw new Error("Department name and code are required.");
+  if (!payload.name) {
+    throw new Error("Department name is required.");
   }
 }
 
@@ -219,10 +217,6 @@ export async function createDepartment(payload) {
 
   validateDepartmentPayload(normalizedPayload);
 
-  if (await collection.findOne({ code: normalizedPayload.code })) {
-    throw new Error("Department code must be unique.");
-  }
-
   const nextDepartment = {
     id: buildId("dep"),
     ...normalizedPayload,
@@ -246,10 +240,6 @@ export async function updateDepartment(departmentId, payload) {
   });
 
   validateDepartmentPayload(normalizedPayload);
-
-  if (await collection.findOne({ id: { $ne: departmentId }, code: normalizedPayload.code })) {
-    throw new Error("Department code must be unique.");
-  }
 
   const updatedDepartment = {
     ...department,
@@ -282,19 +272,59 @@ export async function deleteDepartment(departmentId) {
 
 export async function listMeetings() {
   const collection = await getCollection("meetings");
-  const dbMeetings = await collection.find({}).toArray();
+  const employeesCollection = await getCollection("employees");
+  const [dbMeetings, allEmployees] = await Promise.all([
+    collection.find({}).toArray(),
+    employeesCollection.find({}).toArray(),
+  ]);
 
-  // Fetch Google Calendar events for a reasonable range (e.g., today +/- 30 days)
+  const internalEmails = new Set(allEmployees.map(emp => emp.email.toLowerCase()));
+
+  // Fetch Google Calendar events for a broader range (7 days ago to 90 days ahead)
   const timeMin = new Date();
-  timeMin.setDate(timeMin.getDate() - 30);
+  timeMin.setDate(timeMin.getDate() - 7);
+  timeMin.setHours(0, 0, 0, 0);
+  
   const timeMax = new Date();
-  timeMax.setDate(timeMax.getDate() + 30);
+  timeMax.setDate(timeMax.getDate() + 90);
+  timeMax.setHours(23, 59, 59, 999);
 
   const calendarEvents = await listCalendarEvents(timeMin.toISOString(), timeMax.toISOString());
+  const calendarEventMap = new Map(calendarEvents.map(event => [event.id, event]));
 
-  // Merge Google Calendar events with DB meetings
-  const dbGoogleEventIds = new Set(dbMeetings.map((m) => m.googleEventId).filter(Boolean));
-  const mergedMeetings = [...dbMeetings];
+  // Filter DB meetings for the same range and sync attendees from Google Calendar if linked
+  const dbGoogleEventIds = new Set();
+  const mergedMeetings = dbMeetings
+    .filter(m => {
+      const d = new Date(m.scheduleDateTime);
+      const isInRange = d >= timeMin && d <= timeMax;
+      if (isInRange && m.googleEventId) {
+        dbGoogleEventIds.add(m.googleEventId);
+      }
+      return isInRange;
+    })
+    .map(m => {
+      // If meeting is linked to Google Calendar, sync the attendees list
+      if (m.googleEventId && calendarEventMap.has(m.googleEventId)) {
+        const event = calendarEventMap.get(m.googleEventId);
+        const gcalAttendees = (event.attendees || [])
+          .map((a) => ({
+            name: a.displayName || a.email,
+            email: a.email,
+            status: a.responseStatus === "accepted" ? "accepted" : a.responseStatus || "invited",
+          }))
+          // Filter out internal employees from the external attendees list
+          .filter(a => !internalEmails.has(a.email.toLowerCase()));
+
+        // Merge attendees: keep internal ones from DB, but update external ones from Google Calendar
+        // Google Calendar is the source of truth for participant list and status
+        return {
+          ...m,
+          externalAttendees: gcalAttendees,
+        };
+      }
+      return m;
+    });
 
   for (const event of calendarEvents) {
     if (event.status === "cancelled") continue;
@@ -312,10 +342,14 @@ export async function listMeetings() {
         hostId: "external",
         departmentIds: [],
         internalAttendeeIds: [],
-        externalAttendees: (event.attendees || []).map((a) => ({
-          name: a.displayName || a.email,
-          email: a.email,
-        })),
+        externalAttendees: (event.attendees || [])
+          .map((a) => ({
+            name: a.displayName || a.email,
+            email: a.email,
+            status: a.responseStatus === "accepted" ? "accepted" : a.responseStatus || "invited",
+          }))
+          // Filter out internal employees from the external attendees list
+          .filter(a => !internalEmails.has(a.email.toLowerCase())),
         status: getMeetingStatus(startTime, endTime),
         googleEventId: event.id,
         isVirtual: true,
@@ -323,7 +357,8 @@ export async function listMeetings() {
     }
   }
 
-  return mergedMeetings;
+  // Sort meetings by date (newest first for dashboard, but usually ascending is better for registry)
+  return mergedMeetings.sort((a, b) => new Date(a.scheduleDateTime) - new Date(b.scheduleDateTime));
 }
 
 export async function getMeeting(meetingId) {

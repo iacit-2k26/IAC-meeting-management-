@@ -13,12 +13,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-const roleColors = {
-  admin: "#2563eb",
-  manager: "#7c3aed",
-  user: "#0f766e",
-};
-
 const statusColors = {
   active: "#16a34a",
   inactive: "#94a3b8",
@@ -31,7 +25,6 @@ const emptyForm = {
   email: "",
   designation: "",
   departmentId: "",
-  role: "user",
   reportingTo: "",
   status: "active",
 };
@@ -133,7 +126,6 @@ export default function EmployeesPage() {
       email: employee.email,
       designation: employee.designation,
       departmentId: employee.departmentId,
-      role: employee.role,
       reportingTo: employee.reportingTo,
       status: employee.status,
     });
@@ -198,7 +190,7 @@ export default function EmployeesPage() {
 
   return (
     <div className="space-y-6">
-      <section className="panel-surface p-5 sm:p-6">
+      <section className="-ml-5 p-5 sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#2B3990]">
@@ -354,15 +346,6 @@ export default function EmployeesPage() {
                 ))}
               </select>
             </Field>
-            <Field label="Role">
-              <select
-                value={form.role}
-                onChange={(event) => setForm((current) => ({ ...current, role: event.target.value }))}
-                className="input-base"
-              >
-                <option value="user">User</option>
-              </select>
-            </Field>
             <Field label="Status">
               <select
                 value={form.status}
@@ -418,7 +401,6 @@ export default function EmployeesPage() {
               <TableRow>
                 <TableHead>Employee</TableHead>
                 <TableHead>Department</TableHead>
-                <TableHead>Role</TableHead>
                 <TableHead>Reports to</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Actions</TableHead>
@@ -427,7 +409,7 @@ export default function EmployeesPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-slate-500">
+                  <TableCell colSpan={5} className="text-center text-slate-500">
                     Loading employees...
                   </TableCell>
                 </TableRow>
@@ -449,9 +431,6 @@ export default function EmployeesPage() {
                       </div>
                     </TableCell>
                     <TableCell>{departmentMap[employee.departmentId] ?? "Unknown"}</TableCell>
-                    <TableCell>
-                      <StatusBadge status={employee.role} color={roleColors[employee.role] ?? "#64748b"} />
-                    </TableCell>
                     <TableCell>{employee.reportingTo || "—"}</TableCell>
                     <TableCell>
                       <StatusBadge status={employee.status} color={statusColors[employee.status] ?? "#64748b"} />
@@ -471,7 +450,7 @@ export default function EmployeesPage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-slate-500">
+                  <TableCell colSpan={5} className="text-center text-slate-500">
                     No employees match the current filters.
                   </TableCell>
                 </TableRow>

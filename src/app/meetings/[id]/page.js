@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, Clock3, UsersRound, Video } from "lucide-react";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { getDashboardData, getMeeting } from "@/lib/repository";
+import { formatDescription } from "@/lib/formatters";
 
 const statusColors = {
   upcoming: "#2563eb",
@@ -55,9 +56,9 @@ export default async function MeetingDetailsPage({ params }) {
             <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-slate-900">
               {meeting.title}
             </h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-              {meeting.agenda || "No agenda provided for this meeting."}
-            </p>
+            <div className="mt-2 max-w-3xl whitespace-pre-line text-sm leading-6 text-slate-600">
+              {formatDescription(meeting.agenda) || "No agenda provided for this meeting."}
+            </div>
           </div>
 
           <StatusBadge
