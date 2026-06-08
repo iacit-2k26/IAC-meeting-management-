@@ -31,7 +31,6 @@ const emptyForm = {
   departmentIds: [],
   internalAttendeeIds: [],
   externalAttendeesText: "",
-  status: "upcoming",
 };
 
 async function readResponse(response) {
@@ -187,7 +186,6 @@ export default function MeetingsPage() {
       departmentIds: meeting.departmentIds,
       internalAttendeeIds: meeting.internalAttendeeIds,
       externalAttendeesText: serializeExternalAttendees(meeting.externalAttendees),
-      status: meeting.status,
     });
     setFeedback({ type: "", message: "" });
   };
@@ -308,7 +306,7 @@ export default function MeetingsPage() {
               Modules 3 & 4
             </p>
             <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-slate-900">
-              Meeting Scheduler & Dashboard
+              Meeting Central & Dashboard
             </h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
               Create, update, track, and review meetings with internal and external attendees.
@@ -360,7 +358,7 @@ export default function MeetingsPage() {
               <h2 className="text-lg font-bold text-slate-900">
                 {editingId ? "Edit meeting" : "Create meeting"}
               </h2>
-              <p className="text-sm text-slate-500">Meetings are automatically synchronized with Zoom API.</p>
+              <p className="text-sm text-slate-500">Meetings are automatically synchronized with enterprise conferencing APIs.</p>
             </div>
             {editingId && (
               <button
@@ -440,18 +438,6 @@ export default function MeetingsPage() {
                 ))}
             </select>
           </Field>
-          <Field label="Status">
-            <select
-              value={form.status}
-              onChange={(event) => setForm((current) => ({ ...current, status: event.target.value }))}
-              className="input-base"
-            >
-              <option value="upcoming">Upcoming</option>
-              <option value="ongoing">Ongoing</option>
-              <option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
-          </Field>
 
           <ChecklistGroup
             title="Departments"
@@ -516,7 +502,7 @@ export default function MeetingsPage() {
                   />
                 </div>
                 <input
-                  placeholder="Search by title, host, department, or Zoom ID"
+                  placeholder="Search by title, host, department, or meeting ID"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   className="input-base min-w-[260px]"
@@ -646,7 +632,7 @@ export default function MeetingsPage() {
         onConfirm={handleConfirmDelete}
         isLoading={deleteModal.isDeleting}
         title="Delete Meeting"
-        message={`Are you sure you want to delete "${deleteModal.meeting?.title}"? This will also cancel the meeting on Zoom and cannot be undone.`}
+        message={`Are you sure you want to delete "${deleteModal.meeting?.title}"? This will also cancel the meeting on all linked calendars and cannot be undone.`}
       />
 
       <AttendeesModal

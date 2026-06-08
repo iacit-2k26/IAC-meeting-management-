@@ -57,7 +57,6 @@ function normalizeMeetingPayload(payload = {}) {
     departmentIds: dedupe((payload.departmentIds || []).map(String)),
     internalAttendeeIds: dedupe((payload.internalAttendeeIds || []).map(String)),
     externalAttendees: normalizeExternalAttendees(payload.externalAttendees),
-    status: String(payload.status || "upcoming").trim(),
     zoomMeetingId: String(payload.zoomMeetingId || "").trim(),
     zoomJoinUrl: String(payload.zoomJoinUrl || "").trim(),
     zoomPassword: String(payload.zoomPassword || "").trim(),
@@ -303,6 +302,11 @@ export async function listMeetings() {
       return isInRange;
     })
     .map(m => {
+      // Compute status dynamically from scheduleDateTime + duration
+      const startTime = m.scheduleDateTime;
+      const endTime = new Date(new Date(startTime).getTime() + (m.duration || 0) * 60000).toISOString();
+      const computedStatus = getMeetingStatus(startTime, endTime);
+
       // If meeting is linked to Google Calendar, sync the attendees list
       if (m.googleEventId && calendarEventMap.has(m.googleEventId)) {
         const event = calendarEventMap.get(m.googleEventId);
@@ -330,11 +334,12 @@ export async function listMeetings() {
 
         return {
           ...m,
+          status: computedStatus,
           externalAttendees: gcalAttendees,
           internalAttendeeStatuses: internalStatuses,
         };
       }
-      return m;
+      return { ...m, status: computedStatus };
     });
 
   for (const event of calendarEvents) {
@@ -391,7 +396,11 @@ export async function listMeetings() {
 
 export async function getMeeting(meetingId) {
   const collection = await getCollection("meetings");
-  return collection.findOne({ id: meetingId });
+  const meeting = await collection.findOne({ id: meetingId });
+  if (!meeting) return null;
+  const startTime = meeting.scheduleDateTime;
+  const endTime = new Date(new Date(startTime).getTime() + (meeting.duration || 0) * 60000).toISOString();
+  return { ...meeting, status: getMeetingStatus(startTime, endTime) };
 }
 
 export async function createMeeting(payload) {
@@ -580,6 +589,14 @@ export async function getDashboardData() {
     listMeetings(),
   ]);
 
+  const today = new Date();
+  const todayStr = today.toLocaleDateString("en-CA"); // YYYY-MM-DD
+
+  const todayMeetings = meetings.filter(m => {
+    const meetingDate = new Date(m.scheduleDateTime).toLocaleDateString("en-CA");
+    return meetingDate === todayStr;
+  });
+
   return {
     employees,
     departments,
@@ -587,9 +604,9 @@ export async function getDashboardData() {
     metrics: {
       activeEmployees: employees.filter((employee) => employee.status === "active").length,
       departments: departments.length,
-      upcomingMeetings: meetings.filter((meeting) => meeting.status === "upcoming").length,
-      ongoingMeetings: meetings.filter((meeting) => meeting.status === "ongoing").length,
-      completedMeetings: meetings.filter((meeting) => meeting.status === "completed").length,
+      upcomingMeetings: todayMeetings.filter((meeting) => meeting.status === "upcoming").length,
+      ongoingMeetings: todayMeetings.filter((meeting) => meeting.status === "ongoing").length,
+      completedMeetings: todayMeetings.filter((meeting) => meeting.status === "completed").length,
     },
   };
 }

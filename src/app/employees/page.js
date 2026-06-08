@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Building2, Mail, Pencil, Plus, ShieldCheck, Trash2, UserSquare2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Building2, Mail, Pencil, Plus, ShieldCheck, Trash2, Upload, UserSquare2, X, FileSpreadsheet, AlertCircle, CheckCircle2 } from "lucide-react";
 import StatusBadge from "@/components/ui/StatusBadge";
 import DeleteConfirmationModal from "@/components/ui/DeleteConfirmationModal";
 import {
@@ -51,6 +51,10 @@ export default function EmployeesPage() {
 
   // Delete modal state
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, employee: null, isDeleting: false });
+
+  // Excel import state
+  const fileInputRef = useRef(null);
+  const [importModal, setImportModal] = useState({ isOpen: false, rows: [], isImporting: false, result: null });
 
   const loadData = async () => {
     try {
@@ -188,6 +192,67 @@ export default function EmployeesPage() {
     }
   };
 
+  const handleExcelFile = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Reset the input so the same file can be re-selected
+    event.target.value = "";
+
+    try {
+      const XLSX = (await import("xlsx")).default;
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data, { type: "array" });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const raw = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+      // Normalise column headers: trim & lowercase
+      const rows = raw.map((row) => {
+        const normalized = {};
+        for (const key of Object.keys(row)) {
+          normalized[key.trim().toLowerCase().replace(/\s+/g, "")] = String(row[key]).trim();
+        }
+        // Map common header aliases to field names
+        return {
+          employeeId: normalized.employeeid || normalized.empid || normalized.id || "",
+          firstName: normalized.firstname || normalized.first || normalized.fname || "",
+          lastName: normalized.lastname || normalized.last || normalized.lname || "",
+          email: normalized.email || normalized.emailaddress || "",
+          designation: normalized.designation || normalized.title || normalized.jobtitle || "",
+          departmentId: normalized.departmentid || normalized.deptid || normalized.department || "",
+          reportingTo: normalized.reportingto || normalized.manager || normalized.reportsto || "",
+          status: normalized.status || "active",
+        };
+      }).filter((row) => row.employeeId || row.firstName || row.email);
+
+      setImportModal({ isOpen: true, rows, isImporting: false, result: null });
+    } catch (err) {
+      setFeedback({ type: "error", message: `Failed to read Excel file: ${err.message}` });
+    }
+  };
+
+  const handleImportConfirm = async () => {
+    setImportModal((prev) => ({ ...prev, isImporting: true }));
+    try {
+      const response = await fetch("/api/employees/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ employees: importModal.rows }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Import failed.");
+      setImportModal((prev) => ({ ...prev, isImporting: false, result: payload.data }));
+      await loadData();
+    } catch (err) {
+      setImportModal((prev) => ({ ...prev, isImporting: false }));
+      setFeedback({ type: "error", message: err.message });
+    }
+  };
+
+  const closeImportModal = () => {
+    setImportModal({ isOpen: false, rows: [], isImporting: false, result: null });
+  };
+
   return (
     <div className="space-y-6">
       <section className="-ml-5 p-5 sm:p-6">
@@ -205,14 +270,31 @@ export default function EmployeesPage() {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={startCreate}
-            className="inline-flex items-center gap-2 rounded-xl bg-[#2B3990] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#232f77]"
-          >
-            <Plus size={16} />
-            New employee
-          </button>
+          <div className="flex items-center gap-3">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              className="hidden"
+              onChange={handleExcelFile}
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+            >
+              <Upload size={16} />
+              Import from Excel
+            </button>
+            <button
+              type="button"
+              onClick={startCreate}
+              className="inline-flex items-center gap-2 rounded-xl bg-[#2B3990] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#232f77]"
+            >
+              <Plus size={16} />
+              New employee
+            </button>
+          </div>
         </div>
       </section>
 
@@ -468,6 +550,166 @@ export default function EmployeesPage() {
         title="Delete Employee"
         message={`Are you sure you want to delete ${deleteModal.employee?.firstName} ${deleteModal.employee?.lastName}? This action cannot be undone.`}
       />
+
+      <ExcelImportModal
+        isOpen={importModal.isOpen}
+        rows={importModal.rows}
+        isImporting={importModal.isImporting}
+        result={importModal.result}
+        departments={departments}
+        onConfirm={handleImportConfirm}
+        onClose={closeImportModal}
+      />
+    </div>
+  );
+}
+
+function ExcelImportModal({ isOpen, rows, isImporting, result, departments, onConfirm, onClose }) {
+  if (!isOpen) return null;
+
+  const departmentMap = Object.fromEntries(departments.map((d) => [d.id, d.name]));
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <div
+        className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200"
+        onClick={result ? onClose : undefined}
+      />
+      <div className="relative w-full max-w-3xl scale-100 animate-in zoom-in-95 duration-200">
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+          {/* Header */}
+          <div className="border-b border-slate-100 bg-slate-50/50 px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="rounded-lg bg-[#2B3990]/10 p-2 text-[#2B3990]">
+                  <FileSpreadsheet size={20} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Import Employees from Excel</h3>
+                  <p className="text-sm text-slate-500">
+                    {result
+                      ? `Import complete — ${result.imported} added, ${result.failed} failed.`
+                      : `${rows.length} record${rows.length !== 1 ? "s" : ""} detected. Review before importing.`}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={onClose}
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-500 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+          </div>
+
+          {/* Body */}
+          <div className="max-h-[55vh] overflow-y-auto p-6">
+            {result ? (
+              <div className="space-y-4">
+                <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                  <CheckCircle2 size={18} className="text-emerald-600 shrink-0" />
+                  <p className="text-sm font-medium text-emerald-700">
+                    Successfully imported {result.imported} employee{result.imported !== 1 ? "s" : ""}.
+                  </p>
+                </div>
+                {result.errors.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold text-slate-700">Failed rows ({result.errors.length}):</p>
+                    {result.errors.map((err, i) => (
+                      <div key={i} className="flex items-start gap-2 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-700">
+                        <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                        <span>
+                          <strong>Row {err.index + 1}</strong> ({err.row.firstName} {err.row.lastName}): {err.error}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : rows.length === 0 ? (
+              <div className="py-8 text-center">
+                <p className="text-sm text-slate-500">No valid rows found in the file.</p>
+                <p className="mt-1 text-xs text-slate-400">
+                  Make sure the sheet has headers like: Employee ID, First Name, Last Name, Email, Designation, Department ID, Reporting To, Status
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-xs text-slate-500">
+                  Expected columns: <code className="rounded bg-slate-100 px-1 py-0.5">Employee ID, First Name, Last Name, Email, Designation, Department ID, Reporting To, Status</code>
+                </p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-left text-slate-500">
+                        <th className="pb-2 pr-3 font-semibold">#</th>
+                        <th className="pb-2 pr-3 font-semibold">Emp ID</th>
+                        <th className="pb-2 pr-3 font-semibold">Name</th>
+                        <th className="pb-2 pr-3 font-semibold">Email</th>
+                        <th className="pb-2 pr-3 font-semibold">Designation</th>
+                        <th className="pb-2 pr-3 font-semibold">Department</th>
+                        <th className="pb-2 font-semibold">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((row, i) => (
+                        <tr key={i} className="border-b border-slate-100 hover:bg-slate-50">
+                          <td className="py-2 pr-3 text-slate-400">{i + 1}</td>
+                          <td className="py-2 pr-3 font-mono text-slate-700">{row.employeeId || <span className="italic text-red-400">missing</span>}</td>
+                          <td className="py-2 pr-3 text-slate-700">{row.firstName} {row.lastName}</td>
+                          <td className="py-2 pr-3 text-slate-500">{row.email}</td>
+                          <td className="py-2 pr-3 text-slate-500">{row.designation || "—"}</td>
+                          <td className="py-2 pr-3 text-slate-500">
+                            {departmentMap[row.departmentId] || row.departmentId || "—"}
+                          </td>
+                          <td className="py-2">
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${row.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
+                              {row.status || "active"}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          {!result && (
+            <div className="flex items-center justify-end gap-3 border-t border-slate-100 bg-slate-50/50 px-6 py-4">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={isImporting}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={onConfirm}
+                disabled={isImporting || rows.length === 0}
+                className="rounded-xl bg-[#2B3990] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#232f77] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isImporting ? "Importing..." : `Import ${rows.length} employee${rows.length !== 1 ? "s" : ""}`}
+              </button>
+            </div>
+          )}
+          {result && (
+            <div className="flex justify-end border-t border-slate-100 bg-slate-50/50 px-6 py-4">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-xl bg-[#2B3990] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#232f77]"
+              >
+                Done
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

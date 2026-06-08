@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
@@ -193,21 +194,16 @@ export default function Sidebar({ onNavigate, collapsed, setCollapsed }) {
             gap: showLabels ? 10 : 0,
           }}
         >
-          <div
+     <div
             className="shrink-0 flex items-center justify-center rounded-xl overflow-hidden"
             style={{
-              width: 32,
-              height: 32,
+              width: 32, height: 32,
               background: "#f8faff",
               border: "1px solid #e6ebf5",
               boxShadow: "0 1px 2px rgba(15,23,42,0.05)",
-              color: BRAND_BLUE,
-              fontWeight: 800,
-              fontSize: 12,
-              letterSpacing: "0.08em",
             }}
           >
-            ZM
+            <Image src="/iac-logo.png" alt="IAC" width={22} height={22} priority className="object-contain" />
           </div>
 
           <div
@@ -218,11 +214,11 @@ export default function Sidebar({ onNavigate, collapsed, setCollapsed }) {
               transition: "max-width 0.2s ease",
             }}
           >
-            <span className="text-[11px] font-black tracking-[0.13em] leading-tight" style={{ color: BRAND_BLUE }}>
-              ZOOM MEETINGS
+            <span className="text-[13px] font-black tracking-[0.05em] leading-tight" style={{ color: BRAND_BLUE }}>
+              IAC Meeting Central
             </span>
             <span className="text-[9px] tracking-wide leading-tight mt-0.5" style={{ color: "#97a5bd" }}>
-              Management
+              Enterprise Collaboration
             </span>
           </div>
 

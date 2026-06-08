@@ -88,7 +88,7 @@ export default function SignupPage() {
             <Image src="/iac-logo.png" alt="IAC Logo" width={120} height={120} priority className="w-30 h-30 object-contain" />
           </div>
           <h1 className="text-2xl font-bold -mt-8 mb-1 tracking-tight" style={{ color: BRAND.blue }}>Create Account</h1>
-          <p className="text-slate-500 text-xs">Register for IAC Reports Dashboard</p>
+          <p className="text-slate-500 text-xs">Register for IAC Meeting Central</p>
         </div>
 
         <div className="auth-card rounded-2xl p-6 sm:p-7 relative z-10 animate-slide-up">

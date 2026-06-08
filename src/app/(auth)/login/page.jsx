@@ -62,7 +62,7 @@ export default function LoginPage() {
             <Image src="/iac-logo.png" alt="IAC Logo" width={120} height={120} className="w-30 h-30 object-contain" priority />
           </div>
           <h1 className="text-2xl font-bold -mt-8 mb-1 tracking-tight" style={{ color: BRAND.blue }}>Welcome Back</h1>
-          <p className="text-slate-500 text-xs">Sign in to IAC Reports Dashboard</p>
+          <p className="text-slate-500 text-xs">Sign in to IAC Meeting Central</p>
         </div>
 
         <div className="auth-card rounded-2xl p-6 sm:p-7 animate-slide-up">

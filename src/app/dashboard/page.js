@@ -44,25 +44,25 @@ const statCards = [
     description: "Business units configured for auto-attendee selection workflows.",
   },
   {
-    label: "Upcoming Meetings",
+    label: "Today's Upcoming",
     valueKey: "upcomingMeetings",
     icon: CalendarClock,
     color: "#ea580c",
-    description: "Scheduled sessions waiting for reminders and Zoom room creation.",
+    description: "Scheduled sessions waiting for reminders and virtual room creation today.",
   },
   {
-    label: "Ongoing Meetings",
+    label: "Today's Ongoing",
     valueKey: "ongoingMeetings",
     icon: PlayCircle,
     color: "#16a34a",
-    description: "Live sessions currently in progress across selected departments.",
+    description: "Live sessions currently in progress across selected departments today.",
   },
   {
-    label: "Completed Meetings",
+    label: "Today's Completed",
     valueKey: "completedMeetings",
     icon: CheckCircle2,
     color: "#0f766e",
-    description: "Closed sessions ready for attendance review and audit reporting.",
+    description: "Closed sessions ready for attendance review and audit reporting today.",
   },
 ];
 
@@ -89,10 +89,10 @@ export default async function DashboardPage() {
               Delivery Snapshot
             </p>
             <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-slate-900">
-              Zoom Meeting Management Dashboard
+              IAC Meeting Central Dashboard
             </h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-          Welcome to your central hub for overseeing and optimizing your organization's Zoom meetings.
+              Welcome to your central hub for overseeing and optimizing your organization's meeting operations.
             </p>
           </div>
 
