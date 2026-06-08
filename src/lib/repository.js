@@ -50,6 +50,7 @@ function normalizeExternalAttendees(externalAttendees = []) {
 function normalizeMeetingPayload(payload = {}) {
   return {
     title: String(payload.title || "").trim(),
+    meetingType: String(payload.meetingType || "").trim(),
     agenda: String(payload.agenda || "").trim(),
     scheduleDateTime: String(payload.scheduleDateTime || "").trim(),
     duration: Number(payload.duration || 0),
@@ -63,6 +64,12 @@ function normalizeMeetingPayload(payload = {}) {
     // Google Calendar event ID — stored so we can update/delete later
     googleEventId: String(payload.googleEventId || "").trim(),
   };
+}
+
+// Build the display title used in Zoom & Google Calendar:
+// "Meeting Title – Meeting Type" when a type is selected, otherwise just the title.
+function composeMeetingTitle(title, meetingType) {
+  return meetingType ? `${title} – ${meetingType}` : title;
 }
 
 function validateEmployeePayload(payload) {
@@ -428,7 +435,7 @@ export async function createMeeting(payload) {
   }
 
   const zoomMeeting = await createZoomMeeting({
-    topic: normalizedPayload.title,
+    topic: composeMeetingTitle(normalizedPayload.title, normalizedPayload.meetingType),
     agenda: normalizedPayload.agenda,
     startTime: normalizedPayload.scheduleDateTime,
     duration: normalizedPayload.duration,
@@ -443,6 +450,8 @@ export async function createMeeting(payload) {
   // Build the partial meeting object needed for emails/calendar before DB insert
   const partialMeeting = {
     ...normalizedPayload,
+    // Use composed title for calendar/email display
+    _composedTitle: composeMeetingTitle(normalizedPayload.title, normalizedPayload.meetingType),
     zoomMeetingId: zoomMeeting.id,
     zoomJoinUrl: zoomMeeting.joinUrl,
     zoomPassword: zoomMeeting.password,
@@ -497,7 +506,7 @@ export async function updateMeeting(meetingId, payload) {
 
   if (meeting.zoomMeetingId) {
     await updateZoomMeeting(meeting.zoomMeetingId, {
-      topic: normalizedPayload.title,
+      topic: composeMeetingTitle(normalizedPayload.title, normalizedPayload.meetingType),
       agenda: normalizedPayload.agenda,
       startTime: normalizedPayload.scheduleDateTime,
       duration: normalizedPayload.duration,
@@ -514,6 +523,7 @@ export async function updateMeeting(meetingId, payload) {
   const updatedPartial = {
     ...meeting,
     ...normalizedPayload,
+    _composedTitle: composeMeetingTitle(normalizedPayload.title, normalizedPayload.meetingType),
   };
 
   // Update the Google Calendar event and re-send invites to all attendees

@@ -600,7 +600,7 @@ function AgendaView({ events, onEventClick }) {
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export default function DashboardCalendar() {
+export default function DashboardCalendar({ onReady }) {
   const today = new Date();
   const [view,      setView]      = useState("month");
   const [viewDate,  setViewDate]  = useState(new Date(today.getFullYear(), today.getMonth(), 1));
@@ -609,6 +609,8 @@ export default function DashboardCalendar() {
   const [error,     setError]     = useState(null);
   const [selected,  setSelected]  = useState(null);
   const [dayEvents, setDayEvents] = useState(null); // { date, events }
+
+  const hasCalledOnReady = useRef(false);
 
   const fetchEvents = useCallback(async (date) => {
     setLoading(true); setError(null);
@@ -623,8 +625,13 @@ export default function DashboardCalendar() {
       setError("Could not load events.");
     } finally {
       setLoading(false);
+      // Notify parent that the calendar has finished its first load
+      if (!hasCalledOnReady.current && onReady) {
+        hasCalledOnReady.current = true;
+        onReady();
+      }
     }
-  }, []);
+  }, [onReady]);
 
   useEffect(() => { fetchEvents(viewDate); }, [viewDate, fetchEvents]);
 

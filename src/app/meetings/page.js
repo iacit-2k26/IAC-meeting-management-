@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Calendar, CalendarDays, CheckCircle2, Clock, Clock3, ExternalLink, HelpCircle, Mail, Pencil, Plus, RefreshCw, Trash2, User, UsersRound, Video, X, XCircle } from "lucide-react";
+import { Calendar, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock, HelpCircle, Mail, Pencil, Plus, RefreshCw, Trash2, User, UsersRound, X, XCircle } from "lucide-react";
+import TruckLoader from "@/components/TruckLoader";
 import StatusBadge from "@/components/ui/StatusBadge";
 import DeleteConfirmationModal from "@/components/ui/DeleteConfirmationModal";
 import { formatDescription, stripNewlines } from "@/lib/formatters";
@@ -22,8 +23,55 @@ const statusColors = {
   cancelled: "#dc2626",
 };
 
+const MEETING_TYPES = [
+  "Weekly review meeting",
+  "Monthly review meeting",
+  "Committee meeting",
+  "Urgent dept meeting",
+  "Cross dept meeting",
+  "External meeting",
+];
+
+const TYPE_COLORS = {
+  "Weekly review meeting":  { bg: "bg-blue-50",    text: "text-blue-700",    bar: "bg-blue-500",    ring: "ring-blue-300"    },
+  "Monthly review meeting": { bg: "bg-violet-50",  text: "text-violet-700",  bar: "bg-violet-500",  ring: "ring-violet-300"  },
+  "Committee meeting":      { bg: "bg-amber-50",   text: "text-amber-700",   bar: "bg-amber-500",   ring: "ring-amber-300"   },
+  "Urgent dept meeting":    { bg: "bg-red-50",     text: "text-red-700",     bar: "bg-red-500",     ring: "ring-red-300"     },
+  "Cross dept meeting":     { bg: "bg-emerald-50", text: "text-emerald-700", bar: "bg-emerald-500", ring: "ring-emerald-300" },
+  "External meeting":       { bg: "bg-slate-100",  text: "text-slate-700",   bar: "bg-slate-500",   ring: "ring-slate-300"   },
+  "Other":                  { bg: "bg-slate-50",   text: "text-slate-500",   bar: "bg-slate-300",   ring: "ring-slate-200"   },
+};
+
+function getWeekStart(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+function addWeeks(date, n) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + n * 7);
+  return d;
+}
+function formatWeekLabel(weekStart) {
+  const end = new Date(weekStart);
+  end.setDate(end.getDate() + 6);
+  const fmt = (d) => d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+  return `${fmt(weekStart)} – ${fmt(end)}`;
+}
+function isSameWeek(dateStr, weekStart) {
+  const d = new Date(dateStr);
+  d.setHours(0, 0, 0, 0);
+  const end = new Date(weekStart);
+  end.setDate(end.getDate() + 7);
+  return d >= weekStart && d < end;
+}
+
 const emptyForm = {
   title: "",
+  meetingType: "",
   agenda: "",
   scheduleDateTime: "",
   duration: 30,
@@ -87,6 +135,7 @@ export default function MeetingsPage() {
     end: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString().split("T")[0],
   });
   const [editingId, setEditingId] = useState(null);
+  const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -173,12 +222,14 @@ export default function MeetingsPage() {
     setEditingId(null);
     setForm(emptyForm);
     setFeedback({ type: "", message: "" });
+    setShowForm(true);
   };
 
   const startEdit = (meeting) => {
     setEditingId(meeting.id);
     setForm({
       title: meeting.title,
+      meetingType: meeting.meetingType || "",
       agenda: meeting.agenda,
       scheduleDateTime: meeting.scheduleDateTime.slice(0, 16),
       duration: meeting.duration,
@@ -188,11 +239,13 @@ export default function MeetingsPage() {
       externalAttendeesText: serializeExternalAttendees(meeting.externalAttendees),
     });
     setFeedback({ type: "", message: "" });
+    setShowForm(true);
   };
 
   const resetForm = () => {
     setEditingId(null);
     setForm(emptyForm);
+    setShowForm(false);
   };
 
   const submitForm = async (event) => {
@@ -298,7 +351,9 @@ export default function MeetingsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <>
+      {isLoading && <TruckLoader />}
+      <div className={isLoading ? "invisible" : "space-y-6"}>
       <section className="-ml-5 p-5 sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -311,6 +366,15 @@ export default function MeetingsPage() {
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
               Create, update, track, and review meetings with internal and external attendees.
             </p>
+            <div className="mt-3 inline-flex items-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-3 py-1.5">
+              <CalendarDays size={14} className="text-orange-500" />
+              <span className="text-sm font-semibold text-orange-700">
+                {filteredMeetings.filter((m) => {
+                  const today = new Date().toLocaleDateString("en-CA");
+                  return new Date(m.scheduleDateTime).toLocaleDateString("en-CA") === today && m.status === "upcoming";
+                }).length} upcoming today
+              </span>
+            </div>
           </div>
 
           <div className="flex items-center gap-3">
@@ -335,236 +399,87 @@ export default function MeetingsPage() {
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-3">
-        <MetricCard icon={Video} label="Total meetings" value={filteredMeetings.length} accent="#2B3990" />
-        <MetricCard
-          icon={CalendarDays}
-          label="Upcoming meetings"
-          value={filteredMeetings.filter((meeting) => meeting.status === "upcoming").length}
-          accent="#ea580c"
-        />
-        <MetricCard
-          icon={Clock3}
-          label="Live meetings"
-          value={filteredMeetings.filter((meeting) => meeting.status === "ongoing").length}
-          accent="#16a34a"
-        />
+      <section className="panel-surface p-5">
+          <WeeklyBreakdown meetings={meetings} employeeMap={employeeMap} departmentMap={departmentMap} />
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[1fr_1.3fr]">
-        <form onSubmit={submitForm} className="panel-surface p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900">
-                {editingId ? "Edit meeting" : "Create meeting"}
-              </h2>
-              <p className="text-sm text-slate-500">Meetings are automatically synchronized with enterprise conferencing APIs.</p>
-            </div>
-            {editingId && (
-              <button
-                type="button"
-                onClick={resetForm}
-                className="text-sm font-semibold text-slate-500 hover:text-slate-700"
-              >
-                Cancel edit
-              </button>
-            )}
-          </div>
-
-          {feedback.message && (
-            <div
-              className={`rounded-2xl border px-4 py-3 text-sm ${
-                feedback.type === "error"
-                  ? "border-red-200 bg-red-50 text-red-700"
-                  : "border-emerald-200 bg-emerald-50 text-emerald-700"
-              }`}
-            >
-              {feedback.message}
-            </div>
-          )}
-
-          <Field label="Meeting title">
-            <input
-              required
-              value={form.title}
-              onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
-              className="input-base"
-            />
-          </Field>
-          <Field label="Agenda">
-            <textarea
-              rows={4}
-              value={form.agenda}
-              onChange={(event) => setForm((current) => ({ ...current, agenda: event.target.value }))}
-              placeholder="Provide a brief description or agenda for the meeting."
-              className="input-base"
-            />
-          </Field>
-          <div className="grid gap-4 md:grid-cols-2">
-            <Field label="Schedule">
-              <input
-                required
-                type="datetime-local"
-                value={form.scheduleDateTime}
-                onChange={(event) => setForm((current) => ({ ...current, scheduleDateTime: event.target.value }))}
-                className="input-base"
-              />
-            </Field>
-            <Field label="Duration (minutes)">
-              <input
-                required
-                min="15"
-                type="number"
-                value={form.duration}
-                onChange={(event) => setForm((current) => ({ ...current, duration: event.target.value }))}
-                className="input-base"
-              />
-            </Field>
-          </div>
-          <Field label="Host">
-            <select
-              required
-              value={form.hostId}
-              onChange={(event) => setForm((current) => ({ ...current, hostId: event.target.value }))}
-              className="input-base"
-            >
-              <option value="">Select a host</option>
-              {employees
-                .filter((employee) => employee.status === "active")
-                .map((employee) => (
-                  <option key={employee.id} value={employee.id}>
-                    {employee.firstName} {employee.lastName}
-                  </option>
-                ))}
-            </select>
-          </Field>
-
-          <ChecklistGroup
-            title="Departments"
-            items={departments.map((department) => ({ id: department.id, label: department.name }))}
-            selectedItems={form.departmentIds}
-            onToggle={handleDepartmentToggle}
-          />
-
-          <ChecklistGroup
-            title="Internal attendees"
-            items={employees
-              .filter((employee) => employee.status === "active")
-              .map((employee) => ({
-                id: employee.id,
-                label: `${employee.firstName} ${employee.lastName} · ${employee.designation || employee.role}`,
-              }))}
-            selectedItems={form.internalAttendeeIds}
-            onToggle={(value) => toggleArrayValue("internalAttendeeIds", value)}
-          />
-
-          <Field label="External attendees">
-            <textarea
-              rows={4}
-              value={form.externalAttendeesText}
-              onChange={(event) => setForm((current) => ({ ...current, externalAttendeesText: event.target.value }))}
-              placeholder="One attendee per line: Name, email@example.com, invited"
-              className="input-base"
-            />
-          </Field>
-
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="rounded-xl bg-[#2B3990] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#232f77] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isSubmitting ? "Saving..." : editingId ? "Update meeting" : "Create meeting"}
-          </button>
-        </form>
-
-        <section className="panel-surface p-5">
-          <div className="mb-6 flex flex-col gap-4">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <section className="panel-surface p-5">
+          <div className="mb-6 space-y-3">
+            {/* Row 1 — title + search */}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-lg font-bold text-slate-900">Meeting registry</h2>
                 <p className="text-sm text-slate-500">Review meetings, open details, edit scheduling, or remove entries.</p>
               </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-1.5">
-                  <Calendar size={16} className="text-slate-400" />
-                  <input
-                    type="date"
-                    value={dateRange.start}
-                    onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
-                    className="bg-transparent text-sm font-medium text-slate-700 focus:outline-none"
-                  />
-                  <span className="text-slate-400">to</span>
-                  <input
-                    type="date"
-                    value={dateRange.end}
-                    onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
-                    className="bg-transparent text-sm font-medium text-slate-700 focus:outline-none"
-                  />
-                </div>
-                <input
-                  placeholder="Search by title, host, department, or meeting ID"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  className="input-base min-w-[260px]"
-                />
-              </div>
+              <input
+                placeholder="Search by title, host, department, or meeting ID"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                className="input-base w-full sm:w-72"
+              />
+            </div>
+            {/* Row 2 — date range */}
+            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 w-fit">
+              <Calendar size={15} className="text-slate-400 shrink-0" />
+              <span className="text-xs font-semibold text-slate-500">From</span>
+              <input
+                type="date"
+                value={dateRange.start}
+                onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+                className="bg-transparent text-sm font-medium text-slate-700 focus:outline-none"
+              />
+              <span className="text-slate-300">|</span>
+              <span className="text-xs font-semibold text-slate-500">To</span>
+              <input
+                type="date"
+                value={dateRange.end}
+                onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+                className="bg-transparent text-sm font-medium text-slate-700 focus:outline-none"
+              />
             </div>
           </div>
 
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[35%]">Meeting</TableHead>
-                <TableHead className="w-[15%]">Host</TableHead>
-                <TableHead className="w-[10%]">Attendees</TableHead>
-                <TableHead className="w-[15%]">Schedule</TableHead>
-                <TableHead className="w-[12%]">Status</TableHead>
+                <TableHead className="w-[33%]">Meeting</TableHead>
+                <TableHead className="w-[11%]">Host</TableHead>
+                <TableHead className="w-[13%]">Departments</TableHead>
+                <TableHead className="w-[7%]">Attendees</TableHead>
+                <TableHead className="w-[13%]">Schedule</TableHead>
+                <TableHead className="w-[10%]">Status</TableHead>
                 <TableHead className="w-[13%]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-slate-500">
+                  <TableCell colSpan={7} className="text-center text-slate-500">
                     Loading meetings...
                   </TableCell>
                 </TableRow>
               ) : filteredMeetings.length > 0 ? (
                 filteredMeetings.map((meeting) => (
                   <TableRow key={meeting.id}>
-                    <TableCell className="max-w-[300px]">
+                    <TableCell className="max-w-[260px]">
                       <div className="flex flex-col gap-1">
                         {meeting.isVirtual ? (
                           <span className="font-semibold text-slate-800">
-                            {meeting.title}
+                            {meeting.title}{meeting.meetingType ? ` – ${meeting.meetingType}` : ""}
                           </span>
                         ) : (
                           <Link
                             href={`/meetings/${meeting.id}`}
                             className="font-semibold text-slate-800 hover:text-[#2B3990]"
                           >
-                            {meeting.title}
+                            {meeting.title}{meeting.meetingType ? ` – ${meeting.meetingType}` : ""}
                           </Link>
                         )}
                         <div
-                          className="mt-1 text-xs text-slate-500 whitespace-pre-line"
+                          className="mt-1 text-xs text-slate-500 line-clamp-4"
                           title={formatDescription(meeting.agenda)}
                         >
-                          {formatDescription(meeting.agenda) || "No agenda"}
-                        </div>
-                        <div className="mt-1 flex flex-wrap gap-1.5">
-                          {meeting.departmentIds.length > 0 ? (
-                            meeting.departmentIds.map((departmentId) => (
-                              <span
-                                key={departmentId}
-                                className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600"
-                              >
-                                {departmentMap[departmentId] ?? "Unknown"}
-                              </span>
-                            ))
-                          ) : (
-                            <span className="text-[10px] text-slate-400 italic">No departments</span>
-                          )}
+                          {stripNewlines(formatDescription(meeting.agenda)) || "No agenda"}
                         </div>
                       </div>
                     </TableCell>
@@ -576,6 +491,22 @@ export default function MeetingsPage() {
                       ) : (
                         employeeMap[meeting.hostId] ?? "Unknown"
                       )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {meeting.departmentIds.length > 0 ? (
+                          meeting.departmentIds.map((departmentId) => (
+                            <span
+                              key={departmentId}
+                              className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600"
+                            >
+                              {departmentMap[departmentId] ?? "Unknown"}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-[10px] text-slate-400 italic">—</span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <button
@@ -616,7 +547,7 @@ export default function MeetingsPage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-slate-500">
+                  <TableCell colSpan={7} className="text-center text-slate-500">
                     No meetings match the current search.
                   </TableCell>
                 </TableRow>
@@ -624,7 +555,167 @@ export default function MeetingsPage() {
             </TableBody>
           </Table>
         </section>
-      </section>
+
+      {/* ── Meeting form modal ── */}
+      {showForm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+            onClick={resetForm}
+          />
+          <div className="relative w-full max-w-xl max-h-[90vh] flex flex-col">
+            <form onSubmit={submitForm} className="relative rounded-2xl border border-slate-200 bg-white shadow-2xl flex flex-col max-h-[90vh]">
+              {/* Fixed header */}
+              <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-slate-100 shrink-0">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">
+                    {editingId ? "Edit meeting" : "Create meeting"}
+                  </h2>
+                  <p className="text-sm text-slate-500">Meetings are automatically synchronized with enterprise conferencing APIs.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Scrollable body */}
+              <div className="overflow-y-auto px-6 py-4 space-y-4 flex-1">
+                {feedback.message && (
+                  <div
+                    className={`rounded-2xl border px-4 py-3 text-sm ${
+                      feedback.type === "error"
+                        ? "border-red-200 bg-red-50 text-red-700"
+                        : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                    }`}
+                  >
+                    {feedback.message}
+                  </div>
+                )}
+
+                <Field label="Meeting title">
+                  <input
+                    required
+                    value={form.title}
+                    onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
+                    className="input-base"
+                  />
+                </Field>
+                <Field label="Meeting type (optional)">
+                  <select
+                    value={form.meetingType}
+                    onChange={(event) => setForm((current) => ({ ...current, meetingType: event.target.value }))}
+                    className="input-base"
+                  >
+                    <option value="">— None —</option>
+                    {MEETING_TYPES.map((type) => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Agenda">
+                  <textarea
+                    rows={3}
+                    value={form.agenda}
+                    onChange={(event) => setForm((current) => ({ ...current, agenda: event.target.value }))}
+                    placeholder="Provide a brief description or agenda for the meeting."
+                    className="input-base"
+                  />
+                </Field>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Field label="Schedule">
+                    <input
+                      required
+                      type="datetime-local"
+                      value={form.scheduleDateTime}
+                      onChange={(event) => setForm((current) => ({ ...current, scheduleDateTime: event.target.value }))}
+                      className="input-base"
+                    />
+                  </Field>
+                  <Field label="Duration (minutes)">
+                    <input
+                      required
+                      min="15"
+                      type="number"
+                      value={form.duration}
+                      onChange={(event) => setForm((current) => ({ ...current, duration: event.target.value }))}
+                      className="input-base"
+                    />
+                  </Field>
+                </div>
+                <Field label="Host">
+                  <select
+                    required
+                    value={form.hostId}
+                    onChange={(event) => setForm((current) => ({ ...current, hostId: event.target.value }))}
+                    className="input-base"
+                  >
+                    <option value="">Select a host</option>
+                    {employees
+                      .filter((employee) => employee.status === "active")
+                      .map((employee) => (
+                        <option key={employee.id} value={employee.id}>
+                          {employee.firstName} {employee.lastName}
+                        </option>
+                      ))}
+                  </select>
+                </Field>
+
+                <ChecklistGroup
+                  title="Departments"
+                  items={departments.map((department) => ({ id: department.id, label: department.name }))}
+                  selectedItems={form.departmentIds}
+                  onToggle={handleDepartmentToggle}
+                />
+
+                <ChecklistGroup
+                  title="Internal attendees"
+                  items={employees
+                    .filter((employee) => employee.status === "active")
+                    .map((employee) => ({
+                      id: employee.id,
+                      label: `${employee.firstName} ${employee.lastName} · ${employee.designation || employee.role}`,
+                    }))}
+                  selectedItems={form.internalAttendeeIds}
+                  onToggle={(value) => toggleArrayValue("internalAttendeeIds", value)}
+                />
+
+                <Field label="External attendees">
+                  <textarea
+                    rows={3}
+                    value={form.externalAttendeesText}
+                    onChange={(event) => setForm((current) => ({ ...current, externalAttendeesText: event.target.value }))}
+                    placeholder="One attendee per line: Name, email@example.com, invited"
+                    className="input-base"
+                  />
+                </Field>
+              </div>
+
+              {/* Fixed footer */}
+              <div className="flex justify-end gap-3 px-6 py-4 border-t border-slate-100 shrink-0">
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  disabled={isSubmitting}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="rounded-xl bg-[#2B3990] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#232f77] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isSubmitting ? "Saving..." : editingId ? "Update meeting" : "Create meeting"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       <DeleteConfirmationModal
         isOpen={deleteModal.isOpen}
@@ -642,6 +733,7 @@ export default function MeetingsPage() {
         employeeMap={employeeMap}
       />
     </div>
+    </>
   );
 }
 
@@ -795,17 +887,185 @@ function AttendeesModal({ isOpen, onClose, meeting, employeeMap }) {
   );
 }
 
-function MetricCard({ icon: Icon, label, value, accent }) {
+function WeeklyBreakdown({ meetings, employeeMap, departmentMap }) {
+  const todayWeekStart = useMemo(() => getWeekStart(new Date()), []);
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [drillType, setDrillType] = useState(null); // null = none open
+
+  const currentWeekStart = useMemo(() => addWeeks(todayWeekStart, weekOffset), [todayWeekStart, weekOffset]);
+
+  const presets = [
+    { label: "Last week", offset: -1 },
+    { label: "This week", offset: 0 },
+    { label: "Next week", offset: 1 },
+    { label: "Week +2",   offset: 2 },
+  ];
+
+  const weekMeetings = useMemo(
+    () => meetings.filter((m) => isSameWeek(m.scheduleDateTime, currentWeekStart)),
+    [meetings, currentWeekStart]
+  );
+
+  const breakdown = useMemo(() => {
+    const counts = {};
+    for (const m of weekMeetings) {
+      const key = m.meetingType && MEETING_TYPES.includes(m.meetingType) ? m.meetingType : "Other";
+      counts[key] = (counts[key] || 0) + 1;
+    }
+    return counts;
+  }, [weekMeetings]);
+
+  const maxCount = Math.max(...Object.values(breakdown), 1);
+  const displayTypes = [
+    ...MEETING_TYPES.filter((t) => breakdown[t] > 0),
+    ...(breakdown["Other"] > 0 ? ["Other"] : []),
+  ];
+
+  const drillMeetings = useMemo(() => {
+    if (!drillType) return [];
+    return weekMeetings.filter((m) => {
+      const key = m.meetingType && MEETING_TYPES.includes(m.meetingType) ? m.meetingType : "Other";
+      return key === drillType;
+    }).sort((a, b) => new Date(a.scheduleDateTime) - new Date(b.scheduleDateTime));
+  }, [drillType, weekMeetings]);
+
+  const handleTypeClick = (type) => {
+    setDrillType((prev) => (prev === type ? null : type));
+  };
+
+  // Reset drill when week changes
+  const changeWeek = (newOffset) => {
+    setWeekOffset(newOffset);
+    setDrillType(null);
+  };
+
   return (
-    <div className="panel-surface p-5">
-      <div className="flex items-center gap-3">
-        <Icon className="shrink-0" style={{ color: accent }} size={20} />
+    <div>
+      {/* Header row */}
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-sm font-semibold text-slate-800">{label}</p>
-          <p className="text-xs text-slate-500">Based on current registry filters.</p>
+          <h2 className="text-lg font-bold text-slate-900">Meeting types by week</h2>
+          <p className="text-sm text-slate-500">
+            {weekMeetings.length} meeting{weekMeetings.length !== 1 ? "s" : ""} — click a count to see details.
+          </p>
+        </div>
+        {/* Week nav */}
+        <div className="flex flex-wrap items-center gap-2">
+          <button onClick={() => changeWeek(weekOffset - 1)}
+            className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 transition">
+            <ChevronLeft size={15} />
+          </button>
+          {presets.map((p) => (
+            <button key={p.offset} onClick={() => changeWeek(p.offset)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                weekOffset === p.offset
+                  ? "bg-[#2B3990] text-white"
+                  : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+              }`}>
+              {p.label}
+            </button>
+          ))}
+          <button onClick={() => changeWeek(weekOffset + 1)}
+            className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 transition">
+            <ChevronRight size={15} />
+          </button>
+          <span className="ml-1 text-xs font-semibold text-slate-500">{formatWeekLabel(currentWeekStart)}</span>
         </div>
       </div>
-      <p className="mt-4 text-3xl font-extrabold text-slate-900">{value}</p>
+
+      {weekMeetings.length === 0 ? (
+        <p className="py-6 text-center text-sm text-slate-400 italic">No meetings scheduled for this week.</p>
+      ) : displayTypes.length === 0 ? (
+        <p className="py-6 text-center text-sm text-slate-400 italic">No meetings with a type set this week.</p>
+      ) : (
+        <div className="grid gap-6 xl:grid-cols-[1fr_1.4fr]">
+          {/* Left — bar chart */}
+          <div className="space-y-3">
+            {displayTypes.map((type) => {
+              const count = breakdown[type] || 0;
+              const colors = TYPE_COLORS[type] || TYPE_COLORS["Other"];
+              const pct = Math.round((count / maxCount) * 100);
+              const isActive = drillType === type;
+              return (
+                <div key={type}
+                  className={`flex items-center gap-3 rounded-xl px-3 py-2 transition cursor-pointer ${
+                    isActive ? `ring-2 ${colors.ring} ${colors.bg}` : "hover:bg-slate-50"
+                  }`}
+                  onClick={() => handleTypeClick(type)}
+                >
+                  <span className={`w-40 shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${colors.bg} ${colors.text}`}>
+                    {type}
+                  </span>
+                  <div className="flex-1 overflow-hidden rounded-full bg-slate-100 h-2.5">
+                    <div className={`h-full rounded-full transition-all duration-500 ${colors.bar}`} style={{ width: `${pct}%` }} />
+                  </div>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleTypeClick(type); }}
+                    className={`w-8 shrink-0 text-right text-sm font-bold transition ${
+                      isActive ? colors.text : "text-slate-700 hover:" + colors.text
+                    }`}
+                  >
+                    {count}
+                  </button>
+                </div>
+              );
+            })}
+            {breakdown["Other"] > 0 && (
+              <p className="pt-1 text-xs text-slate-400 italic pl-1">* "Other" = meetings with no type set.</p>
+            )}
+          </div>
+
+          {/* Right — drill-down list */}
+          <div>
+            {drillType ? (
+              <div>
+                <div className="mb-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${(TYPE_COLORS[drillType] || TYPE_COLORS["Other"]).bg} ${(TYPE_COLORS[drillType] || TYPE_COLORS["Other"]).text}`}>
+                      {drillType}
+                    </span>
+                    <span className="text-sm text-slate-500">{drillMeetings.length} meeting{drillMeetings.length !== 1 ? "s" : ""}</span>
+                  </div>
+                  <button onClick={() => setDrillType(null)} className="text-slate-400 hover:text-slate-600 transition">
+                    <X size={16} />
+                  </button>
+                </div>
+                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                  {drillMeetings.map((m) => (
+                    <div key={m.id} className="rounded-xl border border-slate-100 bg-white px-4 py-3 flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        {m.isVirtual ? (
+                          <p className="text-sm font-semibold text-slate-800 truncate">{m.title}</p>
+                        ) : (
+                          <Link href={`/meetings/${m.id}`} className="text-sm font-semibold text-slate-800 hover:text-[#2B3990] truncate block">
+                            {m.title}
+                          </Link>
+                        )}
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                          <span>{formatDateTime(m.scheduleDateTime)}</span>
+                          {employeeMap[m.hostId] && (
+                            <span className="text-slate-400">· {employeeMap[m.hostId]}</span>
+                          )}
+                          {m.departmentIds?.length > 0 && (
+                            <span className="text-slate-400">
+                              · {m.departmentIds.map((id) => departmentMap[id] ?? "?").join(", ")}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <StatusBadge status={m.status} color={statusColors[m.status] ?? "#64748b"} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="flex h-full min-h-[120px] flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-200 text-center p-6">
+                <p className="text-sm font-medium text-slate-400">Click a count on the left to see meetings for that type.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

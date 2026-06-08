@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { BriefcaseBusiness, Building2, Pencil, Plus, Trash2, Users } from "lucide-react";
+import { BriefcaseBusiness, Building2, Pencil, Plus, Trash2, Users, X } from "lucide-react";
+import TruckLoader from "@/components/TruckLoader";
 import StatusBadge from "@/components/ui/StatusBadge";
 import DeleteConfirmationModal from "@/components/ui/DeleteConfirmationModal";
 import {
@@ -34,6 +35,7 @@ export default function DepartmentsPage() {
   const [employees, setEmployees] = useState([]);
   const [query, setQuery] = useState("");
   const [editingId, setEditingId] = useState(null);
+  const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -97,6 +99,7 @@ export default function DepartmentsPage() {
     setEditingId(null);
     setForm(emptyForm);
     setFeedback({ type: "", message: "" });
+    setShowForm(true);
   };
 
   const startEdit = (department) => {
@@ -108,11 +111,13 @@ export default function DepartmentsPage() {
       description: department.description,
     });
     setFeedback({ type: "", message: "" });
+    setShowForm(true);
   };
 
   const resetForm = () => {
     setEditingId(null);
     setForm(emptyForm);
+    setShowForm(false);
   };
 
   const submitForm = async (event) => {
@@ -167,7 +172,9 @@ export default function DepartmentsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <>
+      {isLoading && <TruckLoader />}
+      <div className={isLoading ? "invisible" : "space-y-6"}>
       <section className="-ml-5 p-5 sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -210,118 +217,37 @@ export default function DepartmentsPage() {
         />
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[0.9fr_1.4fr]">
-        <form onSubmit={submitForm} className="panel-surface p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900">
-                {editingId ? "Edit department" : "Create department"}
-              </h2>
-              <p className="text-sm text-slate-500">Keep the organization structure current and searchable.</p>
+      <section className="panel-surface p-5">
+          <div className="mb-4 space-y-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">Department directory</h2>
+                <p className="text-sm text-slate-500">Edit active teams and review linked headcount.</p>
+              </div>
+              <input
+                placeholder="Search by name, head, or description"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                className="input-base w-full sm:w-72"
+              />
             </div>
-            {editingId && (
-              <button
-                type="button"
-                onClick={resetForm}
-                className="text-sm font-semibold text-slate-500 hover:text-slate-700"
-              >
-                Cancel edit
-              </button>
-            )}
-          </div>
-
-          {feedback.message && (
-            <div
-              className={`rounded-2xl border px-4 py-3 text-sm ${
-                feedback.type === "error"
-                  ? "border-red-200 bg-red-50 text-red-700"
-                  : "border-emerald-200 bg-emerald-50 text-emerald-700"
-              }`}
-            >
-              {feedback.message}
-            </div>
-          )}
-
-          <Field label="Department name">
-            <input
-              required
-              value={form.name}
-              onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
-              className="input-base"
-            />
-          </Field>
-          <Field label="Department head">
-            <input
-              value={form.head}
-              list="department-head-options"
-              onChange={(event) => setForm((current) => ({ ...current, head: event.target.value }))}
-              className="input-base"
-            />
-            <datalist id="department-head-options">
-              {employees.map((employee) => (
-                <option
-                  key={employee.id}
-                  value={`${employee.firstName} ${employee.lastName}`}
-                />
-              ))}
-            </datalist>
-          </Field>
-          <Field label="Status">
-            <select
-              value={form.status}
-              onChange={(event) => setForm((current) => ({ ...current, status: event.target.value }))}
-              className="input-base"
-            >
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
-          </Field>
-          <Field label="Description">
-            <textarea
-              rows={5}
-              value={form.description}
-              onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
-              className="input-base"
-            />
-          </Field>
-
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="rounded-xl bg-[#2B3990] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#232f77] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isSubmitting ? "Saving..." : editingId ? "Update department" : "Create department"}
-          </button>
-        </form>
-
-        <section className="panel-surface p-5">
-          <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900">Department directory</h2>
-              <p className="text-sm text-slate-500">Edit active teams and review linked headcount.</p>
-            </div>
-            <input
-              placeholder="Search by name, head, or description"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              className="input-base min-w-[260px]"
-            />
           </div>
 
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Department</TableHead>
-                <TableHead>Head</TableHead>
-                <TableHead>Employees</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Actions</TableHead>
+                <TableHead className="w-[22%]">Department</TableHead>
+                <TableHead className="w-[35%]">Description</TableHead>
+                <TableHead className="w-[15%]">Head</TableHead>
+                <TableHead className="w-[8%]">Employees</TableHead>
+                <TableHead className="w-[10%]">Status</TableHead>
+                <TableHead className="w-[10%]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-slate-500">
+                  <TableCell colSpan={6} className="text-center text-slate-500">
                     Loading departments...
                   </TableCell>
                 </TableRow>
@@ -329,13 +255,13 @@ export default function DepartmentsPage() {
                 filteredDepartments.map((department) => (
                   <TableRow key={department.id}>
                     <TableCell>
-                      <div>
-                        <p className="font-semibold text-slate-800">{department.name}</p>
-                        <p className="mt-1 text-xs text-slate-500">{department.description || "No description"}</p>
-                      </div>
+                      <p className="font-semibold text-slate-800">{department.name}</p>
                     </TableCell>
-                    <TableCell>{department.head || "—"}</TableCell>
-                    <TableCell>{employeesByDepartment[department.id] || 0}</TableCell>
+                    <TableCell>
+                      <p className="text-sm text-slate-500 line-clamp-2">{department.description || "—"}</p>
+                    </TableCell>
+                    <TableCell className="text-sm text-slate-700">{department.head || "—"}</TableCell>
+                    <TableCell className="text-sm font-semibold text-slate-700">{employeesByDepartment[department.id] || 0}</TableCell>
                     <TableCell>
                       <StatusBadge
                         status={department.status}
@@ -357,7 +283,7 @@ export default function DepartmentsPage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-slate-500">
+                  <TableCell colSpan={6} className="text-center text-slate-500">
                     No departments match the current search.
                   </TableCell>
                 </TableRow>
@@ -365,7 +291,108 @@ export default function DepartmentsPage() {
             </TableBody>
           </Table>
         </section>
-      </section>
+
+      {/* ── Department form modal ── */}
+      {showForm && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+            onClick={resetForm}
+          />
+          <div className="relative w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <form onSubmit={submitForm} className="relative rounded-2xl border border-slate-200 bg-white shadow-2xl p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">
+                    {editingId ? "Edit department" : "Create department"}
+                  </h2>
+                  <p className="text-sm text-slate-500">Keep the organization structure current and searchable.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {feedback.message && (
+                <div
+                  className={`rounded-2xl border px-4 py-3 text-sm ${
+                    feedback.type === "error"
+                      ? "border-red-200 bg-red-50 text-red-700"
+                      : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                  }`}
+                >
+                  {feedback.message}
+                </div>
+              )}
+
+              <Field label="Department name">
+                <input
+                  required
+                  value={form.name}
+                  onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+                  className="input-base"
+                />
+              </Field>
+              <Field label="Department head">
+                <input
+                  value={form.head}
+                  list="department-head-options"
+                  onChange={(event) => setForm((current) => ({ ...current, head: event.target.value }))}
+                  className="input-base"
+                />
+                <datalist id="department-head-options">
+                  {employees.map((employee) => (
+                    <option
+                      key={employee.id}
+                      value={`${employee.firstName} ${employee.lastName}`}
+                    />
+                  ))}
+                </datalist>
+              </Field>
+              <Field label="Status">
+                <select
+                  value={form.status}
+                  onChange={(event) => setForm((current) => ({ ...current, status: event.target.value }))}
+                  className="input-base"
+                >
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </Field>
+              <Field label="Description">
+                <textarea
+                  rows={4}
+                  value={form.description}
+                  onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
+                  className="input-base"
+                />
+              </Field>
+
+              <div className="flex justify-end gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  disabled={isSubmitting}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="rounded-xl bg-[#2B3990] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#232f77] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isSubmitting ? "Saving..." : editingId ? "Update department" : "Create department"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       <DeleteConfirmationModal
         isOpen={deleteModal.isOpen}
@@ -376,6 +403,7 @@ export default function DepartmentsPage() {
         message={`Are you sure you want to delete the ${deleteModal.department?.name} department? This action cannot be undone.`}
       />
     </div>
+    </>
   );
 }
 

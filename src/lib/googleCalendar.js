@@ -40,12 +40,15 @@ function isGoogleCalendarConfigured() {
 function buildCalendarEvent(meeting, attendees = []) {
   const {
     title,
+    _composedTitle,
     agenda,
     scheduleDateTime,
     duration,
     zoomJoinUrl,
     zoomPassword,
   } = meeting;
+
+  const eventTitle = _composedTitle || title;
 
   const startTime = new Date(scheduleDateTime);
   const endTime = new Date(startTime.getTime() + Number(duration) * 60 * 1000);
@@ -63,7 +66,7 @@ function buildCalendarEvent(meeting, attendees = []) {
     .join("\n");
 
   return {
-    summary: title,
+    summary: eventTitle,
     description,
     start: {
       dateTime: startTime.toISOString(),

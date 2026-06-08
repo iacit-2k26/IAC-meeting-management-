@@ -66,10 +66,15 @@ export default function Sidebar({ onNavigate, collapsed, setCollapsed }) {
 
   const handleMouseLeave = () => {
     clearTimeout(leaveTimer.current);
-    if (collapsed) {
-      leaveTimer.current = setTimeout(() => setIsExpanded(false), 90);
-    }
+    leaveTimer.current = setTimeout(() => {
+      if (collapsed) setIsExpanded(false);
+    }, 90);
   };
+
+  // Reset expanded state on every navigation so it never gets stuck
+  useEffect(() => {
+    if (collapsed) setIsExpanded(false);
+  }, [pathname, collapsed]);
 
   useEffect(() => {
     return () => clearTimeout(leaveTimer.current);

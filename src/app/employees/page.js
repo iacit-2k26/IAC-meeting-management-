@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Building2, Mail, Pencil, Plus, ShieldCheck, Trash2, Upload, UserSquare2, X, FileSpreadsheet, AlertCircle, CheckCircle2 } from "lucide-react";
+import TruckLoader from "@/components/TruckLoader";
 import StatusBadge from "@/components/ui/StatusBadge";
 import DeleteConfirmationModal from "@/components/ui/DeleteConfirmationModal";
 import {
@@ -44,6 +45,7 @@ export default function EmployeesPage() {
   const [query, setQuery] = useState("");
   const [selectedDepartment, setSelectedDepartment] = useState("all");
   const [editingId, setEditingId] = useState(null);
+  const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -119,6 +121,7 @@ export default function EmployeesPage() {
     setEditingId(null);
     setForm(emptyForm);
     setFeedback({ type: "", message: "" });
+    setShowForm(true);
   };
 
   const startEdit = (employee) => {
@@ -134,11 +137,13 @@ export default function EmployeesPage() {
       status: employee.status,
     });
     setFeedback({ type: "", message: "" });
+    setShowForm(true);
   };
 
   const resetForm = () => {
     setEditingId(null);
     setForm(emptyForm);
+    setShowForm(false);
   };
 
   const submitForm = async (event) => {
@@ -254,7 +259,9 @@ export default function EmployeesPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <>
+      {isLoading && <TruckLoader />}
+      <div className={isLoading ? "invisible" : "space-y-6"}>
       <section className="-ml-5 p-5 sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -333,187 +340,74 @@ export default function EmployeesPage() {
         </div>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[0.95fr_1.35fr]">
-        <form onSubmit={submitForm} className="panel-surface p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900">
-                {editingId ? "Edit employee" : "Create employee"}
-              </h2>
-              <p className="text-sm text-slate-500">All changes save directly to the local MVP datastore.</p>
-            </div>
-            {editingId && (
-              <button
-                type="button"
-                onClick={resetForm}
-                className="text-sm font-semibold text-slate-500 hover:text-slate-700"
-              >
-                Cancel edit
-              </button>
-            )}
-          </div>
-
-          {feedback.message && (
-            <div
-              className={`rounded-2xl border px-4 py-3 text-sm ${
-                feedback.type === "error"
-                  ? "border-red-200 bg-red-50 text-red-700"
-                  : "border-emerald-200 bg-emerald-50 text-emerald-700"
-              }`}
-            >
-              {feedback.message}
-            </div>
-          )}
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <Field label="Employee ID">
-              <input
-                required
-                value={form.employeeId}
-                onChange={(event) => setForm((current) => ({ ...current, employeeId: event.target.value }))}
-                className="input-base"
-              />
-            </Field>
-            <Field label="Email">
-              <input
-                required
-                type="email"
-                value={form.email}
-                onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
-                className="input-base"
-              />
-            </Field>
-            <Field label="First name">
-              <input
-                required
-                value={form.firstName}
-                onChange={(event) => setForm((current) => ({ ...current, firstName: event.target.value }))}
-                className="input-base"
-              />
-            </Field>
-            <Field label="Last name">
-              <input
-                required
-                value={form.lastName}
-                onChange={(event) => setForm((current) => ({ ...current, lastName: event.target.value }))}
-                className="input-base"
-              />
-            </Field>
-            <Field label="Designation">
-              <input
-                value={form.designation}
-                onChange={(event) => setForm((current) => ({ ...current, designation: event.target.value }))}
-                className="input-base"
-              />
-            </Field>
-            <Field label="Reports to">
-              <input
-                value={form.reportingTo}
-                onChange={(event) => setForm((current) => ({ ...current, reportingTo: event.target.value }))}
-                className="input-base"
-              />
-            </Field>
-            <Field label="Department">
-              <select
-                required
-                value={form.departmentId}
-                onChange={(event) => setForm((current) => ({ ...current, departmentId: event.target.value }))}
-                className="input-base"
-              >
-                <option value="">Select a department</option>
-                {departments.map((department) => (
-                  <option key={department.id} value={department.id}>
-                    {department.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Status">
-              <select
-                value={form.status}
-                onChange={(event) => setForm((current) => ({ ...current, status: event.target.value }))}
-                className="input-base"
-              >
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
-            </Field>
-          </div>
-
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="rounded-xl bg-[#2B3990] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#232f77] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isSubmitting ? "Saving..." : editingId ? "Update employee" : "Create employee"}
-          </button>
-        </form>
-
-        <section className="panel-surface p-5">
-          <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900">Employee directory</h2>
-              <p className="text-sm text-slate-500">Search, review, edit, and remove employees.</p>
-            </div>
-
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <input
-                placeholder="Search by name, email, or designation"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                className="input-base min-w-[240px]"
-              />
-              <select
-                value={selectedDepartment}
-                onChange={(event) => setSelectedDepartment(event.target.value)}
-                className="input-base"
-              >
-                <option value="all">All departments</option>
-                {departments.map((department) => (
-                  <option key={department.id} value={department.id}>
-                    {department.name}
-                  </option>
-                ))}
-              </select>
+      <section className="panel-surface p-5">
+          <div className="mb-4 space-y-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">Employee directory</h2>
+                <p className="text-sm text-slate-500">Search, review, edit, and remove employees.</p>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <input
+                  placeholder="Search by name, email, or designation"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  className="input-base w-full sm:w-64"
+                />
+                <select
+                  value={selectedDepartment}
+                  onChange={(event) => setSelectedDepartment(event.target.value)}
+                  className="input-base"
+                >
+                  <option value="all">All departments</option>
+                  {departments.map((department) => (
+                    <option key={department.id} value={department.id}>
+                      {department.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
 
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Employee</TableHead>
-                <TableHead>Department</TableHead>
-                <TableHead>Reports to</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Actions</TableHead>
+                <TableHead className="w-[5%]">ID</TableHead>
+                <TableHead className="w-[18%]">Name</TableHead>
+                <TableHead className="w-[18%]">Email</TableHead>
+                <TableHead className="w-[14%]">Designation</TableHead>
+                <TableHead className="w-[14%]">Department</TableHead>
+                <TableHead className="w-[12%]">Reports to</TableHead>
+                <TableHead className="w-[9%]">Status</TableHead>
+                <TableHead className="w-[10%]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-slate-500">
+                  <TableCell colSpan={8} className="text-center text-slate-500">
                     Loading employees...
                   </TableCell>
                 </TableRow>
               ) : filteredEmployees.length > 0 ? (
                 filteredEmployees.map((employee) => (
                   <TableRow key={employee.id}>
+                    <TableCell className="font-mono text-xs text-slate-500">{employee.employeeId}</TableCell>
                     <TableCell>
-                      <div>
-                        <p className="font-semibold text-slate-800">
-                          {employee.firstName} {employee.lastName}
-                        </p>
-                        <div className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
-                          <Mail size={12} />
-                          <span>{employee.email}</span>
-                        </div>
-                        <p className="mt-1 text-xs text-slate-500">
-                          {employee.employeeId} · {employee.designation || "No designation"}
-                        </p>
+                      <p className="font-semibold text-slate-800">
+                        {employee.firstName} {employee.lastName}
+                      </p>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                        <Mail size={12} className="shrink-0" />
+                        <span className="truncate max-w-[160px]">{employee.email}</span>
                       </div>
                     </TableCell>
+                    <TableCell className="text-sm text-slate-600">{employee.designation || "—"}</TableCell>
                     <TableCell>{departmentMap[employee.departmentId] ?? "Unknown"}</TableCell>
-                    <TableCell>{employee.reportingTo || "—"}</TableCell>
+                    <TableCell className="text-sm text-slate-600">{employee.reportingTo || "—"}</TableCell>
                     <TableCell>
                       <StatusBadge status={employee.status} color={statusColors[employee.status] ?? "#64748b"} />
                     </TableCell>
@@ -532,7 +426,7 @@ export default function EmployeesPage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-slate-500">
+                  <TableCell colSpan={8} className="text-center text-slate-500">
                     No employees match the current filters.
                   </TableCell>
                 </TableRow>
@@ -540,7 +434,140 @@ export default function EmployeesPage() {
             </TableBody>
           </Table>
         </section>
-      </section>
+
+      {/* ── Employee form modal ── */}
+      {showForm && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+            onClick={resetForm}
+          />
+          <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <form onSubmit={submitForm} className="relative rounded-2xl border border-slate-200 bg-white shadow-2xl p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">
+                    {editingId ? "Edit employee" : "Create employee"}
+                  </h2>
+                  <p className="text-sm text-slate-500">All changes save directly to the datastore.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {feedback.message && (
+                <div
+                  className={`rounded-2xl border px-4 py-3 text-sm ${
+                    feedback.type === "error"
+                      ? "border-red-200 bg-red-50 text-red-700"
+                      : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                  }`}
+                >
+                  {feedback.message}
+                </div>
+              )}
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Employee ID">
+                  <input
+                    required
+                    value={form.employeeId}
+                    onChange={(event) => setForm((current) => ({ ...current, employeeId: event.target.value }))}
+                    className="input-base"
+                  />
+                </Field>
+                <Field label="Email">
+                  <input
+                    required
+                    type="email"
+                    value={form.email}
+                    onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
+                    className="input-base"
+                  />
+                </Field>
+                <Field label="First name">
+                  <input
+                    required
+                    value={form.firstName}
+                    onChange={(event) => setForm((current) => ({ ...current, firstName: event.target.value }))}
+                    className="input-base"
+                  />
+                </Field>
+                <Field label="Last name">
+                  <input
+                    required
+                    value={form.lastName}
+                    onChange={(event) => setForm((current) => ({ ...current, lastName: event.target.value }))}
+                    className="input-base"
+                  />
+                </Field>
+                <Field label="Designation">
+                  <input
+                    value={form.designation}
+                    onChange={(event) => setForm((current) => ({ ...current, designation: event.target.value }))}
+                    className="input-base"
+                  />
+                </Field>
+                <Field label="Reports to">
+                  <input
+                    value={form.reportingTo}
+                    onChange={(event) => setForm((current) => ({ ...current, reportingTo: event.target.value }))}
+                    className="input-base"
+                  />
+                </Field>
+                <Field label="Department">
+                  <select
+                    required
+                    value={form.departmentId}
+                    onChange={(event) => setForm((current) => ({ ...current, departmentId: event.target.value }))}
+                    className="input-base"
+                  >
+                    <option value="">Select a department</option>
+                    {departments.map((department) => (
+                      <option key={department.id} value={department.id}>
+                        {department.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Status">
+                  <select
+                    value={form.status}
+                    onChange={(event) => setForm((current) => ({ ...current, status: event.target.value }))}
+                    className="input-base"
+                  >
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </Field>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  disabled={isSubmitting}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="rounded-xl bg-[#2B3990] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#232f77] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isSubmitting ? "Saving..." : editingId ? "Update employee" : "Create employee"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       <DeleteConfirmationModal
         isOpen={deleteModal.isOpen}
@@ -561,6 +588,7 @@ export default function EmployeesPage() {
         onClose={closeImportModal}
       />
     </div>
+    </>
   );
 }
 

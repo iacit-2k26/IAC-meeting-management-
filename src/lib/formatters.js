@@ -1,101 +1,97 @@
 /**
  * Cleans up and formats meeting descriptions/agendas.
- * Handles HTML tags like <br> and <a>, and removes unwanted Zoom invitation boilerplate.
- * 
+ * Handles HTML tags like <br> and <a>, and removes Zoom/Teams/Meet boilerplate.
+ *
  * @param {string} text - The raw description or agenda text.
- * @returns {string} - Cleaned text suitable for display with whitespace-pre-line.
+ * @returns {string} - Cleaned text suitable for display.
  */
 export function formatDescription(text) {
   if (!text) return "";
 
   let cleaned = text;
 
-  // 1. Convert <br>, <br/>, <p> to newlines
+  // 1. Convert HTML block elements to newlines, strip remaining tags
   cleaned = cleaned.replace(/<br\s*\/?>/gi, "\n");
   cleaned = cleaned.replace(/<\/p>/gi, "\n");
-  cleaned = cleaned.replace(/<p>/gi, "");
-
-  // 2. Handle <a> tags: extract the text content or the URL
-  // If the text content is a URL, just keep it.
-  cleaned = cleaned.replace(/<a\s+[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi, (match, url, label) => {
-    return label.trim() === url.trim() ? url : `${label} (${url})`;
-  });
-  
-  // 3. Remove any remaining HTML tags
+  cleaned = cleaned.replace(/<p[^>]*>/gi, "");
+  cleaned = cleaned.replace(/<a\s+[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi, (_, url, label) =>
+    label.trim() === url.trim() ? url : label.trim()
+  );
   cleaned = cleaned.replace(/<\/?[^>]+(>|$)/g, "");
 
-  // 4. Decode common HTML entities
-  const entities = {
-    "&nbsp;": " ",
-    "&amp;": "&",
-    "&lt;": "<",
-    "&gt;": ">",
-    "&quot;": '"',
-    "&#39;": "'",
-  };
-  Object.keys(entities).forEach(entity => {
-    cleaned = cleaned.replace(new RegExp(entity, "g"), entities[entity]);
-  });
+  // 2. Decode HTML entities
+  cleaned = cleaned
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
 
-  // 5. Clean up multiple consecutive newlines
-  cleaned = cleaned.replace(/\n\s*\n\s*\n+/g, "\n\n");
-
-  // 6. Remove common Zoom invitation boilerplate
-  const boilerplatePatterns = [
-    /.*is inviting you to a scheduled Zoom meeting\./gi,
-    /Topic: .*/gi,
-    /Time: .*/gi,
-    /Join Zoom Meeting\s*https?:\/\/\S+/gi,
-    /Meeting ID: \d+/gi,
-    /Passcode: \w+/gi,
-    /One tap mobile.*/gi,
-    /Dial by your location.*/gi,
-    /Find your local number:.*/gi,
-    /Join by SIP.*/gi,
-    /Join by H\.323.*/gi,
-    /Join by Skype for Business.*/gi,
-    /\+\d+[\d\s,]*#.*/g,         // One-tap mobile patterns
-    /\d{3,}\s\d{4,}.*--.*/g,     // Phone number blocks with separators
-    /US\s\+\d+.*/gi,             // US dial-in suffix
-    /\+\d{1,3}\s\d{10,}/g,       // International phone formats
-    /Meeting ID: .*/gi,
-    /Passcode: .*/gi,
-    /.*--.*\+\d+.*/g,            // Broad catch for "Text -- +Number"
-    /\+\d+[\d\s,]*#.*/g,         // Catch one-tap with #
-    /^\s*[\d\s\+\-\(\),]{5,}$/gm, // Lines that are only numbers and phone symbols (min 5 chars to avoid stripping list numbers like "1)")
-    /^\s*[\(\)]\s*$/gm,          // Lines that only contain a single parenthesis
-    /^\s*[•·]\s*$/gm,            // Lines that only contain a bullet or middle dot
-    /^Agenda\s*·\s*/gi,          // Strip "Agenda ·" prefix
-    /^Agenda\s*:\s*/gi,          // Strip "Agenda:" prefix (handles spaces)
-    /View meeting insights with Zoom AI Companion.*/gi,
-    /This event was created by the Meeting Management System.*/gi,
-    /.*@zoomcrc\.com.*/gi,       // Catch SIP addresses like 9159711778@zoomcrc.com
-    /Join instructions.*/gi,      // Catch "Join instructions" text
-    /•\s*\d+@zoomcrc\.com.*/gi,  // Catch bulleted SIP addresses
-    /SIP:.*/gi,
-    /H\.323:.*/gi,
-    /Join by Phone.*/gi,
-    /Join by Information Systems.*/gi,
-    /United States.*/g,          // Usually part of dial-in lists
-    /https?:\/\/(\w+\.)?zoom\.us\/\S+/gi, // Any remaining Zoom URLs
-    /Microsoft Teams meeting.*/gi,
-    /Meeting chat link.*/gi,     // Catch "Meeting chat link"
-    /________________________________________________________________________________/g,
-    /_{5,}/g,                    // Catch any line of 5 or more underscores
+  // 3. Strip Zoom / Teams / Google Meet boilerplate line-by-line
+  const boilerplateLinePatterns = [
+    /is inviting you to a scheduled zoom meeting/i,
+    /^topic:/i,
+    /^time:/i,
+    /^join zoom meeting/i,
+    /^meeting id:/i,
+    /^passcode:/i,
+    /^one tap mobile/i,
+    /^dial by your location/i,
+    /^find your local number/i,
+    /^join by sip/i,
+    /^join by h\.?323/i,
+    /^join by skype/i,
+    /^join by phone/i,
+    /^join by information/i,
+    /^join instructions/i,
+    /^sip:/i,
+    /^h\.323:/i,
+    /^us /i,
+    /^united states/i,
+    /^meeting chat link/i,
+    /microsoft teams meeting/i,
+    /view meeting insights/i,
+    /this event was created by the meeting management system/i,
+    /@zoomcrc\.com/i,
+    /zoom\.us\//i,
+    /^_{4,}/,
+    /^-{4,}/,
   ];
 
-  boilerplatePatterns.forEach(pattern => {
-    cleaned = cleaned.replace(pattern, "");
-  });
+  cleaned = cleaned
+    .split("\n")
+    .filter(line => {
+      const t = line.trim();
+      if (!t) return false;
+      // Drop lines that are just phone numbers / dial-in codes (digits, spaces, +, -, (, ), #, ,)
+      if (/^\+?[\d\s\(\)\-,#]{7,}$/.test(t)) return false;
+      // Drop lines matching boilerplate patterns
+      if (boilerplateLinePatterns.some(p => p.test(t))) return false;
+      // Drop dial-in lines: contain a phone number pattern AND short text (e.g. "US --+1234...")
+      if (/[\d]{7,}/.test(t) && /[#,]\s*(US|CA|GB|AU|IN)/i.test(t)) return false;
+      // Drop lines that are mostly dashes/underscores with optional short text
+      if (/^[\-_\s]{3,}/.test(t) && t.replace(/[\-_\s]/g, "").length < 5) return false;
+      // Drop lines that contain a Zoom/Teams URL
+      if (/https?:\/\/([\w.]*zoom\.us|teams\.microsoft\.com|meet\.google\.com)/i.test(t)) return false;
+      return true;
+    })
+    .join("\n");
+
+  // 4. Collapse 3+ consecutive blank lines → double newline
+  cleaned = cleaned.replace(/\n{3,}/g, "\n\n");
 
   return cleaned.trim();
 }
 
 /**
- * Strips all newlines and replaces them with spaces.
- * Useful for one-line previews in tables.
+ * Returns a single-line plain-text preview, max 120 chars.
+ * Used for table cell previews.
  */
 export function stripNewlines(text) {
   if (!text) return "";
-  return text.replace(/\n+/g, " ").trim();
+  const single = text.replace(/\n+/g, " · ").replace(/\s{2,}/g, " ").trim();
+  // Remove leading separator if present
+  const clean = single.replace(/^·\s*/, "");
+  return clean.length > 400 ? clean.slice(0, 400) + "…" : clean;
 }

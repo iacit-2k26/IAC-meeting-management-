@@ -31,11 +31,11 @@ const TableRow = React.forwardRef(function TableRow({ className, ...props }, ref
 });
 
 const TableHead = React.forwardRef(function TableHead({ className, ...props }, ref) {
-  return <th ref={ref} className={cn("h-10 px-4 text-left align-middle font-semibold text-slate-600", className)} {...props} />;
+  return <th ref={ref} className={cn("h-8 px-3 py-2 text-left align-middle font-semibold text-slate-600", className)} {...props} />;
 });
 
 const TableCell = React.forwardRef(function TableCell({ className, ...props }, ref) {
-  return <td ref={ref} className={cn("p-4 align-middle text-slate-700", className)} {...props} />;
+  return <td ref={ref} className={cn("px-3 py-2.5 align-middle text-slate-700", className)} {...props} />;
 });
 
 const TableCaption = React.forwardRef(function TableCaption({ className, ...props }, ref) {
