@@ -171,7 +171,7 @@ export default function WeeklyMeetingBreakdown({ meetings }) {
             return (
               <div key={type} className="flex items-center gap-3">
                 {/* Label */}
-                <span className={`w-44 shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${colors.bg} ${colors.text}`}>
+                <span className={`w-44 shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${colors.text}`}>
                   {type}
                 </span>
                 {/* Bar */}

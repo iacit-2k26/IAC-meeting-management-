@@ -70,27 +70,30 @@ export default function DateTimePicker({ value, onChange, placeholder = "Select 
   const [viewDate, setViewDate] = useState(new Date(selectedDate));
 
   useEffect(() => {
-    if (isOpen) {
-      if (triggerRef.current) {
-        const updatePosition = () => {
-          const rect = triggerRef.current.getBoundingClientRect();
-          setPopoverCoords({
-            bottom: window.innerHeight - rect.top + 8,
-            left: rect.left + window.scrollX,
-            width: rect.width,
-          });
-        };
+    if (!isOpen) return;
+    if (!triggerRef.current) return;
 
-        updatePosition();
-        window.addEventListener("scroll", updatePosition, true);
-        window.addEventListener("resize", updatePosition);
+    const updatePosition = () => {
+      if (!triggerRef.current) return;
+      const rect = triggerRef.current.getBoundingClientRect();
+      const popoverH = 340; // approx height of the calendar popover
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const openUpward = spaceBelow < popoverH && rect.top > spaceBelow;
 
-        return () => {
-          window.removeEventListener("scroll", updatePosition, true);
-          window.removeEventListener("resize", updatePosition);
-        };
-      }
-    }
+      setPopoverCoords(
+        openUpward
+          ? { bottom: window.innerHeight - rect.top + 4, left: rect.left }
+          : { top: rect.bottom + 4, left: rect.left }
+      );
+    };
+
+    updatePosition();
+    window.addEventListener("scroll", updatePosition, true);
+    window.addEventListener("resize", updatePosition);
+    return () => {
+      window.removeEventListener("scroll", updatePosition, true);
+      window.removeEventListener("resize", updatePosition);
+    };
   }, [isOpen]);
 
   useEffect(() => {
@@ -203,9 +206,10 @@ export default function DateTimePicker({ value, onChange, placeholder = "Select 
   const popoverContent = (
     <div
       id="datetime-picker-popover"
-      className="fixed z-[9999] p-4 bg-white border border-slate-200 rounded-xl shadow-[0_-10px_40px_rgba(0,0,0,0.15)] w-[280px]"
+      className="fixed z-[9999] p-4 bg-white border border-slate-200 rounded-xl shadow-[0_8px_40px_rgba(0,0,0,0.15)] w-[280px]"
       style={{
-        bottom: `${popoverCoords.bottom}px`,
+        top: popoverCoords.top !== undefined ? `${popoverCoords.top}px` : undefined,
+        bottom: popoverCoords.bottom !== undefined ? `${popoverCoords.bottom}px` : undefined,
         left: `${popoverCoords.left}px`,
       }}
     >
@@ -326,9 +330,7 @@ export default function DateTimePicker({ value, onChange, placeholder = "Select 
       <div
         ref={triggerRef}
         onClick={() => {
-          if (!isOpen) {
-            setStep("date");
-          }
+          if (!isOpen) setStep("date");
           setIsOpen(!isOpen);
         }}
         className="flex items-center justify-between w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-white cursor-pointer hover:border-[#2B3990]/30 transition-all shadow-sm"

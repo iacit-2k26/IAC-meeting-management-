@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Calendar, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock, HelpCircle, Mail, Pencil, Plus, RefreshCw, Trash2, User, UsersRound, X, XCircle } from "lucide-react";
+import CustomSelect from "@/components/ui/CustomSelect";
+import DateTimePicker from "@/components/ui/DateTimePicker";
+import DatePicker from "@/components/ui/DatePicker";
 import TruckLoader from "@/components/TruckLoader";
 import StatusBadge from "@/components/ui/StatusBadge";
 import DeleteConfirmationModal from "@/components/ui/DeleteConfirmationModal";
@@ -139,6 +142,7 @@ export default function MeetingsPage() {
   const [form, setForm] = useState(emptyForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [feedback, setFeedback] = useState({ type: "", message: "" });
 
   // Delete modal state
@@ -146,9 +150,13 @@ export default function MeetingsPage() {
   // Attendees modal state
   const [attendeesModal, setAttendeesModal] = useState({ isOpen: false, meeting: null });
 
-  const loadData = async () => {
+  const loadData = async (silent = false) => {
     try {
-      setIsLoading(true);
+      if (silent) {
+        setIsRefreshing(true);
+      } else {
+        setIsLoading(true);
+      }
       const [meetingResponse, employeeResponse, departmentResponse] = await Promise.all([
         fetch("/api/meetings", { cache: "no-store" }),
         fetch("/api/employees", { cache: "no-store" }),
@@ -168,6 +176,7 @@ export default function MeetingsPage() {
       setFeedback({ type: "error", message: error.message });
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
   };
 
@@ -269,7 +278,7 @@ export default function MeetingsPage() {
       });
 
       await readResponse(response);
-      await loadData();
+      await loadData(true);
       resetForm();
       setFeedback({
         type: "success",
@@ -293,7 +302,7 @@ export default function MeetingsPage() {
     try {
       const response = await fetch(`/api/meetings/${deleteModal.meeting.id}`, { method: "DELETE" });
       await readResponse(response);
-      await loadData();
+      await loadData(true);
       if (editingId === deleteModal.meeting.id) {
         resetForm();
       }
@@ -366,9 +375,9 @@ export default function MeetingsPage() {
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
               Create, update, track, and review meetings with internal and external attendees.
             </p>
-            <div className="mt-3 inline-flex items-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-3 py-1.5">
-              <CalendarDays size={14} className="text-orange-500" />
-              <span className="text-sm font-semibold text-orange-700">
+            <div className="mt-3 inline-flex items-center gap-2 rounded-xl border border-[#2B3990]/50 bg-blue-50 px-3 py-1.5">
+              <CalendarDays size={14} className="text-[#2B3990]" />
+              <span className="text-sm font-semibold text-[#2B3990]">
                 {filteredMeetings.filter((m) => {
                   const today = new Date().toLocaleDateString("en-CA");
                   return new Date(m.scheduleDateTime).toLocaleDateString("en-CA") === today && m.status === "upcoming";
@@ -380,11 +389,11 @@ export default function MeetingsPage() {
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={loadData}
-              disabled={isLoading}
+              onClick={() => loadData(false)}
+              disabled={isLoading || isRefreshing}
               className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50"
             >
-              <RefreshCw size={16} className={isLoading ? "animate-spin" : ""} />
+              <RefreshCw size={16} className={isRefreshing ? "animate-spin" : ""} />
               Refresh
             </button>
             <button
@@ -419,23 +428,29 @@ export default function MeetingsPage() {
               />
             </div>
             {/* Row 2 — date range */}
-            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 w-fit">
-              <Calendar size={15} className="text-slate-400 shrink-0" />
-              <span className="text-xs font-semibold text-slate-500">From</span>
-              <input
-                type="date"
-                value={dateRange.start}
-                onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
-                className="bg-transparent text-sm font-medium text-slate-700 focus:outline-none"
-              />
-              <span className="text-slate-300">|</span>
-              <span className="text-xs font-semibold text-slate-500">To</span>
-              <input
-                type="date"
-                value={dateRange.end}
-                onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
-                className="bg-transparent text-sm font-medium text-slate-700 focus:outline-none"
-              />
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Calendar size={15} className="text-slate-400 shrink-0" />
+                <span className="text-xs font-semibold text-slate-500">From</span>
+                <div className="w-40">
+                  <DatePicker
+                    value={dateRange.start}
+                    onChange={(val) => setDateRange(prev => ({ ...prev, start: val }))}
+                    placeholder="Start date"
+                  />
+                </div>
+              </div>
+              <span className="text-slate-300 font-bold">|</span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-slate-500">To</span>
+                <div className="w-40">
+                  <DatePicker
+                    value={dateRange.end}
+                    onChange={(val) => setDateRange(prev => ({ ...prev, end: val }))}
+                    placeholder="End date"
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
@@ -605,16 +620,15 @@ export default function MeetingsPage() {
                   />
                 </Field>
                 <Field label="Meeting type (optional)">
-                  <select
+                  <CustomSelect
                     value={form.meetingType}
-                    onChange={(event) => setForm((current) => ({ ...current, meetingType: event.target.value }))}
-                    className="input-base"
-                  >
-                    <option value="">— None —</option>
-                    {MEETING_TYPES.map((type) => (
-                      <option key={type} value={type}>{type}</option>
-                    ))}
-                  </select>
+                    onChange={(val) => setForm((current) => ({ ...current, meetingType: val }))}
+                    placeholder="— None —"
+                    options={[
+                      { value: "", label: "— None —" },
+                      ...MEETING_TYPES.map((t) => ({ value: t, label: t })),
+                    ]}
+                  />
                 </Field>
                 <Field label="Agenda">
                   <textarea
@@ -627,12 +641,10 @@ export default function MeetingsPage() {
                 </Field>
                 <div className="grid gap-4 md:grid-cols-2">
                   <Field label="Schedule">
-                    <input
-                      required
-                      type="datetime-local"
+                    <DateTimePicker
                       value={form.scheduleDateTime}
-                      onChange={(event) => setForm((current) => ({ ...current, scheduleDateTime: event.target.value }))}
-                      className="input-base"
+                      onChange={(e) => setForm((current) => ({ ...current, scheduleDateTime: e.target.value }))}
+                      placeholder="Select date and time"
                     />
                   </Field>
                   <Field label="Duration (minutes)">
@@ -647,21 +659,17 @@ export default function MeetingsPage() {
                   </Field>
                 </div>
                 <Field label="Host">
-                  <select
-                    required
+                  <CustomSelect
                     value={form.hostId}
-                    onChange={(event) => setForm((current) => ({ ...current, hostId: event.target.value }))}
-                    className="input-base"
-                  >
-                    <option value="">Select a host</option>
-                    {employees
-                      .filter((employee) => employee.status === "active")
-                      .map((employee) => (
-                        <option key={employee.id} value={employee.id}>
-                          {employee.firstName} {employee.lastName}
-                        </option>
-                      ))}
-                  </select>
+                    onChange={(val) => setForm((current) => ({ ...current, hostId: val }))}
+                    placeholder="Select a host"
+                    options={[
+                      { value: "", label: "Select a host" },
+                      ...employees
+                        .filter((e) => e.status === "active")
+                        .map((e) => ({ value: e.id, label: `${e.firstName} ${e.lastName}` })),
+                    ]}
+                  />
                 </Field>
 
                 <ChecklistGroup
@@ -993,7 +1001,7 @@ function WeeklyBreakdown({ meetings, employeeMap, departmentMap }) {
                   }`}
                   onClick={() => handleTypeClick(type)}
                 >
-                  <span className={`w-40 shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${colors.bg} ${colors.text}`}>
+                  <span className={`w-40 shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${colors.text}`}>
                     {type}
                   </span>
                   <div className="flex-1 overflow-hidden rounded-full bg-slate-100 h-2.5">
@@ -1083,18 +1091,39 @@ function ChecklistGroup({ title, items, selectedItems, onToggle }) {
   return (
     <div>
       <p className="mb-2 text-sm font-semibold text-slate-700">{title}</p>
-      <div className="max-h-44 space-y-2 overflow-y-auto rounded-2xl border border-slate-200 bg-slate-50/60 p-3">
-        {items.map((item) => (
-          <label key={item.id} className="flex items-start gap-2 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              checked={selectedItems.includes(item.id)}
-              onChange={() => onToggle(item.id)}
-              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#2B3990] focus:ring-[#2B3990]/20"
-            />
-            <span>{item.label}</span>
-          </label>
-        ))}
+      <div className="max-h-44 space-y-1 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50/60 p-2">
+        {items.length === 0 && (
+          <p className="py-2 text-center text-xs text-slate-400 italic">No items available.</p>
+        )}
+        {items.map((item) => {
+          const checked = selectedItems.includes(item.id);
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => onToggle(item.id)}
+              className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm transition-colors ${
+                checked
+                  ? "bg-[#2B3990]/8 text-[#2B3990]"
+                  : "text-slate-700 hover:bg-white"
+              }`}
+            >
+              {/* Custom checkbox box */}
+              <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-all ${
+                checked
+                  ? "border-[#2B3990] bg-[#2B3990]"
+                  : "border-slate-300 bg-white"
+              }`}>
+                {checked && (
+                  <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
+                    <path d="M1 3L3.5 5.5L8 1" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                )}
+              </span>
+              <span className="leading-snug">{item.label}</span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );

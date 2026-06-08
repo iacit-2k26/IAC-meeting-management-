@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { BriefcaseBusiness, Building2, Pencil, Plus, Trash2, Users, X } from "lucide-react";
+import StatCard from "@/components/ui/StatCard";
+import CustomSelect from "@/components/ui/CustomSelect";
 import TruckLoader from "@/components/TruckLoader";
 import StatusBadge from "@/components/ui/StatusBadge";
 import DeleteConfirmationModal from "@/components/ui/DeleteConfirmationModal";
@@ -39,14 +41,16 @@ export default function DepartmentsPage() {
   const [form, setForm] = useState(emptyForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [feedback, setFeedback] = useState({ type: "", message: "" });
 
   // Delete modal state
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, department: null, isDeleting: false });
 
-  const loadData = async () => {
+  const loadData = async (silent = false) => {
     try {
-      setIsLoading(true);
+      if (silent) setIsRefreshing(true);
+      else setIsLoading(true);
       const [departmentResponse, employeeResponse] = await Promise.all([
         fetch("/api/departments", { cache: "no-store" }),
         fetch("/api/employees", { cache: "no-store" }),
@@ -63,6 +67,7 @@ export default function DepartmentsPage() {
       setFeedback({ type: "error", message: error.message });
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
   };
 
@@ -135,7 +140,7 @@ export default function DepartmentsPage() {
       });
 
       await readResponse(response);
-      await loadData();
+      await loadData(true);
       resetForm();
       setFeedback({
         type: "success",
@@ -159,7 +164,7 @@ export default function DepartmentsPage() {
     try {
       const response = await fetch(`/api/departments/${deleteModal.department.id}`, { method: "DELETE" });
       await readResponse(response);
-      await loadData();
+      await loadData(true);
       if (editingId === deleteModal.department.id) {
         resetForm();
       }
@@ -202,18 +207,20 @@ export default function DepartmentsPage() {
       </section>
 
       <section className="grid gap-4 md:grid-cols-3">
-        <MetricCard icon={Building2} label="Total departments" value={departments.length} accent="#2B3990" />
-        <MetricCard
+        <StatCard icon={Building2} label="Total departments" value={departments.length} color="#2B3990" description="Live count from the current dataset." />
+        <StatCard
           icon={Users}
           label="Largest team"
-          value={departments.length > 0 ? Math.max(...departments.map((department) => employeesByDepartment[department.id] || 0)) : 0}
-          accent="#16a34a"
+          value={departments.length > 0 ? Math.max(...departments.map((d) => employeesByDepartment[d.id] || 0)) : 0}
+          color="#16a34a"
+          description="Headcount in the biggest department."
         />
-        <MetricCard
+        <StatCard
           icon={BriefcaseBusiness}
           label="Active departments"
-          value={departments.filter((department) => department.status === "active").length}
-          accent="#7c3aed"
+          value={departments.filter((d) => d.status === "active").length}
+          color="#7c3aed"
+          description="Departments available for meeting scheduling."
         />
       </section>
 
@@ -354,15 +361,15 @@ export default function DepartmentsPage() {
                 </datalist>
               </Field>
               <Field label="Status">
-                <select
-                  value={form.status}
-                  onChange={(event) => setForm((current) => ({ ...current, status: event.target.value }))}
-                  className="input-base"
-                >
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                </select>
-              </Field>
+                  <CustomSelect
+                    value={form.status}
+                    onChange={(val) => setForm((current) => ({ ...current, status: val }))}
+                    options={[
+                      { value: "active", label: "Active" },
+                      { value: "inactive", label: "Inactive" },
+                    ]}
+                  />
+                </Field>
               <Field label="Description">
                 <textarea
                   rows={4}
@@ -404,21 +411,6 @@ export default function DepartmentsPage() {
       />
     </div>
     </>
-  );
-}
-
-function MetricCard({ icon: Icon, label, value, accent }) {
-  return (
-    <div className="panel-surface p-5">
-      <div className="flex items-center gap-3">
-        <Icon className="shrink-0" style={{ color: accent }} size={20} />
-        <div>
-          <p className="text-sm font-semibold text-slate-800">{label}</p>
-          <p className="text-xs text-slate-500">Live count from the current dataset.</p>
-        </div>
-      </div>
-      <p className="mt-4 text-3xl font-extrabold text-slate-900">{value}</p>
-    </div>
   );
 }
 

@@ -18,23 +18,37 @@ export default function CustomSelect({
 
   const selected = options.find((o) => o.value === value);
 
-  const handleOpen = () => {
-    if (disabled || !triggerRef.current) return;
+  const reposition = () => {
+    if (!triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    const dropdownMaxH = 240;
+
+    const openUpward = spaceBelow < dropdownMaxH && spaceAbove > spaceBelow;
+
     setDropdownStyle({
       position: "fixed",
-      top: rect.bottom + 4,
       left: rect.left,
-      minWidth: rect.width,
-      zIndex: 9999,
+      width: rect.width,
+      zIndex: 99999,
+      ...(openUpward
+        ? { bottom: window.innerHeight - rect.top + 4 }
+        : { top: rect.bottom + 4 }),
     });
+  };
+
+  const handleOpen = () => {
+    if (disabled) return;
+    if (!open) reposition();
     setOpen((prev) => !prev);
   };
 
+  // Close on outside click
   useEffect(() => {
     if (!open) return;
-    const handler = (event) => {
-      if (triggerRef.current && !triggerRef.current.contains(event.target)) {
+    const handler = (e) => {
+      if (triggerRef.current && !triggerRef.current.contains(e.target)) {
         setOpen(false);
       }
     };
@@ -42,42 +56,56 @@ export default function CustomSelect({
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
+  // Reposition on any scroll (but don't close)
   useEffect(() => {
     if (!open) return;
-    const handler = () => setOpen(false);
+    const handler = () => reposition();
     window.addEventListener("scroll", handler, true);
     return () => window.removeEventListener("scroll", handler, true);
   }, [open]);
 
+  // Reposition on resize
   useEffect(() => {
     if (!open) return;
-    const handler = () => setOpen(false);
+    const handler = () => reposition();
     window.addEventListener("resize", handler);
     return () => window.removeEventListener("resize", handler);
   }, [open]);
 
+  // Close on Escape
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [open]);
+
   const dropdown = (
     <div
-      style={dropdownStyle}
-      className="bg-white border border-slate-200 shadow-xl rounded-lg py-1 max-h-60 overflow-y-auto"
+      style={{ ...dropdownStyle, maxHeight: 240 }}
+      className="bg-white border border-slate-200 shadow-2xl rounded-xl py-1 overflow-y-auto"
     >
       {options.map((opt) => (
         <div
           key={opt.value}
-          onMouseDown={(event) => {
-            event.preventDefault();
-            if (opt.value === "") return;
+          onMouseDown={(e) => {
+            e.preventDefault();
+            if (opt.disabled) return;
             onChange(opt.value);
             setOpen(false);
           }}
-          className={`px-3 py-2 text-sm cursor-pointer transition-colors select-none
+          className={`px-3 py-2 text-sm cursor-pointer transition-colors select-none flex items-center gap-2
             ${opt.value === value
               ? "bg-[#2B3990]/10 text-[#2B3990] font-semibold"
-              : opt.value === ""
-              ? "text-slate-400 italic cursor-default"
+              : opt.disabled
+              ? "text-slate-300 cursor-not-allowed"
               : "text-slate-700 hover:bg-slate-50"
             }`}
         >
+          {opt.value === value && (
+            <span className="w-1.5 h-1.5 shrink-0" />
+          )}
+          {opt.value !== value && <span className="w-1.5 shrink-0" />}
           {opt.label}
         </div>
       ))}
@@ -91,19 +119,19 @@ export default function CustomSelect({
         type="button"
         onClick={handleOpen}
         disabled={disabled}
-        style={{ minWidth }}
-        className={`flex items-center justify-between gap-2 px-3 py-1.5 text-sm border rounded-md bg-white w-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#2B3990]/20
+        className={`flex items-center justify-between gap-2 px-3 py-2 text-sm border rounded-xl bg-white w-full transition-all focus:outline-none focus:ring-2 focus:ring-[#2B3990]/20
+          ${open ? "border-[#2B3990] ring-2 ring-[#2B3990]/15" : "border-slate-200"}
           ${disabled
-            ? "border-slate-200 text-slate-400 cursor-not-allowed opacity-60"
-            : "border-slate-300 text-slate-700 hover:border-[#2B3990] cursor-pointer"
+            ? "text-slate-400 cursor-not-allowed opacity-60"
+            : "text-slate-700 hover:border-[#2B3990]/50 cursor-pointer"
           }`}
       >
-        <span className={selected && selected.value !== "" ? "text-slate-800" : "text-slate-400"}>
+        <span className={selected && selected.value !== "" ? "text-slate-800" : "text-slate-400 italic"}>
           {selected && selected.value !== "" ? selected.label : placeholder}
         </span>
         <ChevronDown
           size={14}
-          className={`text-slate-400 flex-shrink-0 transition-transform duration-150 ${open ? "rotate-180" : ""}`}
+          className={`text-slate-400 shrink-0 transition-transform duration-150 ${open ? "rotate-180" : ""}`}
         />
       </button>
 

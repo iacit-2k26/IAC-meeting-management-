@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Building2, Mail, Pencil, Plus, ShieldCheck, Trash2, Upload, UserSquare2, X, FileSpreadsheet, AlertCircle, CheckCircle2 } from "lucide-react";
+import StatCard from "@/components/ui/StatCard";
+import CustomSelect from "@/components/ui/CustomSelect";
 import TruckLoader from "@/components/TruckLoader";
 import StatusBadge from "@/components/ui/StatusBadge";
 import DeleteConfirmationModal from "@/components/ui/DeleteConfirmationModal";
@@ -49,6 +51,7 @@ export default function EmployeesPage() {
   const [form, setForm] = useState(emptyForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [feedback, setFeedback] = useState({ type: "", message: "" });
 
   // Delete modal state
@@ -58,9 +61,10 @@ export default function EmployeesPage() {
   const fileInputRef = useRef(null);
   const [importModal, setImportModal] = useState({ isOpen: false, rows: [], isImporting: false, result: null });
 
-  const loadData = async () => {
+  const loadData = async (silent = false) => {
     try {
-      setIsLoading(true);
+      if (silent) setIsRefreshing(true);
+      else setIsLoading(true);
       const [employeeResponse, departmentResponse] = await Promise.all([
         fetch("/api/employees", { cache: "no-store" }),
         fetch("/api/departments", { cache: "no-store" }),
@@ -77,6 +81,7 @@ export default function EmployeesPage() {
       setFeedback({ type: "error", message: error.message });
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
   };
 
@@ -161,7 +166,7 @@ export default function EmployeesPage() {
       });
 
       await readResponse(response);
-      await loadData();
+      await loadData(true);
       resetForm();
       setFeedback({
         type: "success",
@@ -185,7 +190,7 @@ export default function EmployeesPage() {
     try {
       const response = await fetch(`/api/employees/${deleteModal.employee.id}`, { method: "DELETE" });
       await readResponse(response);
-      await loadData();
+      await loadData(true);
       if (editingId === deleteModal.employee.id) {
         resetForm();
       }
@@ -247,7 +252,7 @@ export default function EmployeesPage() {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "Import failed.");
       setImportModal((prev) => ({ ...prev, isImporting: false, result: payload.data }));
-      await loadData();
+      await loadData(true);
     } catch (err) {
       setImportModal((prev) => ({ ...prev, isImporting: false }));
       setFeedback({ type: "error", message: err.message });
@@ -306,38 +311,9 @@ export default function EmployeesPage() {
       </section>
 
       <section className="grid gap-4 md:grid-cols-3">
-        <div className="panel-surface p-5">
-          <div className="flex items-center gap-3">
-            <UserSquare2 className="text-[#2B3990]" size={20} />
-            <div>
-              <p className="text-sm font-semibold text-slate-800">Total people</p>
-              <p className="text-xs text-slate-500">Employees currently registered in the system.</p>
-            </div>
-          </div>
-          <p className="mt-4 text-3xl font-extrabold text-slate-900">{employees.length}</p>
-        </div>
-
-        <div className="panel-surface p-5">
-          <div className="flex items-center gap-3">
-            <Building2 className="text-[#7c3aed]" size={20} />
-            <div>
-              <p className="text-sm font-semibold text-slate-800">Departments linked</p>
-              <p className="text-xs text-slate-500">Business units available for employee assignment.</p>
-            </div>
-          </div>
-          <p className="mt-4 text-3xl font-extrabold text-slate-900">{departments.length}</p>
-        </div>
-
-        <div className="panel-surface p-5">
-          <div className="flex items-center gap-3">
-            <ShieldCheck className="text-[#16a34a]" size={20} />
-            <div>
-              <p className="text-sm font-semibold text-slate-800">Active accounts</p>
-              <p className="text-xs text-slate-500">Employees available for scheduling and hosting.</p>
-            </div>
-          </div>
-          <p className="mt-4 text-3xl font-extrabold text-slate-900">{activeEmployees}</p>
-        </div>
+        <StatCard icon={UserSquare2} label="Total people" value={employees.length} color="#2B3990" description="Employees currently registered in the system." />
+        <StatCard icon={Building2} label="Departments linked" value={departments.length} color="#7c3aed" description="Business units available for employee assignment." />
+        <StatCard icon={ShieldCheck} label="Active accounts" value={activeEmployees} color="#16a34a" description="Employees available for scheduling and hosting." />
       </section>
 
       <section className="panel-surface p-5">
@@ -354,18 +330,14 @@ export default function EmployeesPage() {
                   onChange={(event) => setQuery(event.target.value)}
                   className="input-base w-full sm:w-64"
                 />
-                <select
+                <CustomSelect
                   value={selectedDepartment}
-                  onChange={(event) => setSelectedDepartment(event.target.value)}
-                  className="input-base"
-                >
-                  <option value="all">All departments</option>
-                  {departments.map((department) => (
-                    <option key={department.id} value={department.id}>
-                      {department.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(val) => setSelectedDepartment(val)}
+                  options={[
+                    { value: "all", label: "All departments" },
+                    ...departments.map((d) => ({ value: d.id, label: d.name })),
+                  ]}
+                />
               </div>
             </div>
           </div>
@@ -521,29 +493,25 @@ export default function EmployeesPage() {
                   />
                 </Field>
                 <Field label="Department">
-                  <select
-                    required
+                  <CustomSelect
                     value={form.departmentId}
-                    onChange={(event) => setForm((current) => ({ ...current, departmentId: event.target.value }))}
-                    className="input-base"
-                  >
-                    <option value="">Select a department</option>
-                    {departments.map((department) => (
-                      <option key={department.id} value={department.id}>
-                        {department.name}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(val) => setForm((current) => ({ ...current, departmentId: val }))}
+                    placeholder="Select a department"
+                    options={[
+                      { value: "", label: "Select a department" },
+                      ...departments.map((d) => ({ value: d.id, label: d.name })),
+                    ]}
+                  />
                 </Field>
                 <Field label="Status">
-                  <select
+                  <CustomSelect
                     value={form.status}
-                    onChange={(event) => setForm((current) => ({ ...current, status: event.target.value }))}
-                    className="input-base"
-                  >
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                  </select>
+                    onChange={(val) => setForm((current) => ({ ...current, status: val }))}
+                    options={[
+                      { value: "active", label: "Active" },
+                      { value: "inactive", label: "Inactive" },
+                    ]}
+                  />
                 </Field>
               </div>
 
