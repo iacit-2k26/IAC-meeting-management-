@@ -13,6 +13,7 @@ import {
   X,
   LogOut,
   Settings,
+  UserCog,
 } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 
@@ -42,11 +43,12 @@ export default function Sidebar({ onNavigate, collapsed, setCollapsed }) {
 
   const navItems = useMemo(
     () => [
-      { label: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
-      { label: "Employees", icon: Users, href: "/employees" },
-      { label: "Departments", icon: Building2, href: "/departments" },
-      { label: "Meetings", icon: Video, href: "/meetings" },
-      { label: "Settings", icon: Settings, href: "/settings" },
+      { label: "Dashboard",   icon: LayoutDashboard, href: "/dashboard"   },
+      { label: "Employees",   icon: Users,           href: "/employees"   },
+      { label: "Departments", icon: Building2,        href: "/departments" },
+      { label: "Meetings",    icon: Video,            href: "/meetings"    },
+      { label: "App Users",   icon: UserCog,          href: "/users"       },
+      { label: "Settings",    icon: Settings,         href: "/settings"    },
     ],
     []
   );
