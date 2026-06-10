@@ -132,6 +132,12 @@ export default async function MeetingDetailsPage({ params }) {
               <dt className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Schedule</dt>
               <dd className="mt-2 text-sm font-semibold text-slate-900">{formatDateTime(meeting.scheduleDateTime)}</dd>
             </div>
+            <div className="rounded-2xl border border-slate-200 bg-white/70 p-4">
+              <dt className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Location</dt>
+              <dd className="mt-2 text-sm font-semibold text-slate-900">
+                {meeting.isVirtual ? "Online (Zoom)" : (meeting.location || "In person")}
+              </dd>
+            </div>
             <div className="rounded-2xl border border-slate-200 bg-white/70 p-4 sm:col-span-2">
               <dt className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Departments</dt>
               <dd className="mt-2 flex flex-wrap gap-2">

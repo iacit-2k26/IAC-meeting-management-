@@ -3,6 +3,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Sidebar from "@/components/layout/Sidebar";
+import Chatbot from "@/components/ui/Chatbot";
 import { useAuth } from "@/lib/AuthContext";
 import TruckLoader from "@/components/TruckLoader";
 
@@ -89,6 +90,7 @@ export default function ClientLayout({ children }) {
           {children}
         </div>
       </main>
+      <Chatbot />
     </div>
   );
 }

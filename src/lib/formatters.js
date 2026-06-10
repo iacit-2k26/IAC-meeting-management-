@@ -53,10 +53,12 @@ export function formatDescription(text) {
     /microsoft teams meeting/i,
     /view meeting insights/i,
     /this event was created by the meeting management system/i,
+    /🔗 join zoom meeting/i,
+    /🔑 password/i,
+    /📋 agenda/i,
     /@zoomcrc\.com/i,
     /zoom\.us\//i,
-    /^_{4,}/,
-    /^-{4,}/,
+    /^[─\-_\s]{3,}/,
   ];
 
   cleaned = cleaned

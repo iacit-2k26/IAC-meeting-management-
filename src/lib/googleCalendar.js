@@ -46,6 +46,8 @@ function buildCalendarEvent(meeting, attendees = []) {
     duration,
     zoomJoinUrl,
     zoomPassword,
+    location,
+    isVirtual,
   } = meeting;
 
   const eventTitle = _composedTitle || title;
@@ -56,10 +58,10 @@ function buildCalendarEvent(meeting, attendees = []) {
   const description = [
     agenda ? `📋 Agenda:\n${agenda}` : "",
     "",
+    !isVirtual && location ? `📍 Location: ${location}` : "",
     zoomJoinUrl ? `🔗 Join Zoom Meeting:\n${zoomJoinUrl}` : "",
     zoomPassword ? `🔑 Password: ${zoomPassword}` : "",
     "",
-    "────────────────────",
     "This event was created by the Meeting Management System.",
   ]
     .filter(Boolean)
@@ -82,8 +84,8 @@ function buildCalendarEvent(meeting, attendees = []) {
         ? `${a.firstName} ${a.lastName || ""}`.trim()
         : a.name || undefined,
     })),
-    // Zoom meeting link as a conference data fallback
-    location: zoomJoinUrl || "",
+    // Use manual location for in-person, or Zoom link for virtual
+    location: !isVirtual ? location : (zoomJoinUrl || ""),
     reminders: {
       useDefault: false,
       overrides: [

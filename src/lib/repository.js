@@ -58,6 +58,8 @@ function normalizeMeetingPayload(payload = {}) {
     departmentIds: dedupe((payload.departmentIds || []).map(String)),
     internalAttendeeIds: dedupe((payload.internalAttendeeIds || []).map(String)),
     externalAttendees: normalizeExternalAttendees(payload.externalAttendees),
+    location: String(payload.location || "").trim(),
+    isVirtual: payload.isVirtual !== undefined ? Boolean(payload.isVirtual) : true,
     zoomMeetingId: String(payload.zoomMeetingId || "").trim(),
     zoomJoinUrl: String(payload.zoomJoinUrl || "").trim(),
     zoomPassword: String(payload.zoomPassword || "").trim(),
@@ -68,8 +70,19 @@ function normalizeMeetingPayload(payload = {}) {
 
 // Build the display title used in Zoom & Google Calendar:
 // "Meeting Title – Meeting Type" when a type is selected, otherwise just the title.
+// Prevents duplication if the meetingType is already present in the title.
 function composeMeetingTitle(title, meetingType) {
-  return meetingType ? `${title} – ${meetingType}` : title;
+  if (!meetingType) return title;
+  
+  const normalizedTitle = title.toLowerCase();
+  const normalizedType = meetingType.toLowerCase();
+
+  // If title already contains the meeting type, just return the title
+  if (normalizedTitle.includes(normalizedType)) {
+    return title;
+  }
+  
+  return `${title} – ${meetingType}`;
 }
 
 function validateEmployeePayload(payload) {
@@ -275,7 +288,7 @@ export async function deleteDepartment(departmentId) {
   }
 }
 
-export async function listMeetings() {
+export async function listMeetings(baseDate = null) {
   const collection = await getCollection("meetings");
   const employeesCollection = await getCollection("employees");
   const [dbMeetings, allEmployees] = await Promise.all([
@@ -285,12 +298,14 @@ export async function listMeetings() {
 
   const internalEmails = new Set(allEmployees.map(emp => emp.email.toLowerCase()));
 
-  // Fetch Google Calendar events for a broader range (7 days ago to 90 days ahead)
-  const timeMin = new Date();
+  // Fetch Google Calendar events based on baseDate or current time
+  const referenceDate = baseDate ? new Date(baseDate) : new Date();
+  
+  const timeMin = new Date(referenceDate);
   timeMin.setDate(timeMin.getDate() - 7);
   timeMin.setHours(0, 0, 0, 0);
   
-  const timeMax = new Date();
+  const timeMax = new Date(referenceDate);
   timeMax.setDate(timeMax.getDate() + 90);
   timeMax.setHours(23, 59, 59, 999);
 

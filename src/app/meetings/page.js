@@ -82,6 +82,8 @@ const emptyForm = {
   departmentIds: [],
   internalAttendeeIds: [],
   externalAttendeesText: "",
+  location: "",
+  isVirtual: true,
 };
 
 async function readResponse(response) {
@@ -169,10 +171,11 @@ export default function MeetingsPage() {
         readResponse(departmentResponse),
       ]);
 
-      setMeetings(meetingData);
-      setEmployees(employeeData);
-      setDepartments(departmentData);
+      setMeetings(Array.isArray(meetingData) ? meetingData : []);
+      setEmployees(Array.isArray(employeeData) ? employeeData : []);
+      setDepartments(Array.isArray(departmentData) ? departmentData : []);
     } catch (error) {
+      console.error("Error loading meetings data:", error);
       setFeedback({ type: "error", message: error.message });
     } finally {
       setIsLoading(false);
@@ -181,30 +184,27 @@ export default function MeetingsPage() {
   };
 
   useEffect(() => {
-    async function bootstrap() {
-      await loadData();
-    }
-
-    bootstrap();
+    loadData();
   }, []);
 
   const employeeMap = useMemo(
     () =>
       Object.fromEntries(
-        employees.map((employee) => [employee.id, `${employee.firstName} ${employee.lastName}`])
+        (employees || []).map((employee) => [employee.id, `${employee.firstName} ${employee.lastName}`])
       ),
     [employees]
   );
 
   const departmentMap = useMemo(
-    () => Object.fromEntries(departments.map((department) => [department.id, department.name])),
+    () => Object.fromEntries((departments || []).map((department) => [department.id, department.name])),
     [departments]
   );
 
   const filteredMeetings = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
+    const list = Array.isArray(meetings) ? meetings : [];
     
-    return meetings.filter((meeting) => {
+    return list.filter((meeting) => {
       // 1. Date Range Filter
       const meetingDate = new Date(meeting.scheduleDateTime).toISOString().split("T")[0];
       const isWithinDateRange = meetingDate >= dateRange.start && meetingDate <= dateRange.end;
@@ -219,7 +219,7 @@ export default function MeetingsPage() {
         meeting.agenda,
         meeting.zoomMeetingId,
         employeeMap[meeting.hostId],
-        ...meeting.departmentIds.map((departmentId) => departmentMap[departmentId]),
+        ...(meeting.departmentIds || []).map((departmentId) => departmentMap[departmentId]),
       ]
         .join(" ")
         .toLowerCase()
@@ -237,15 +237,17 @@ export default function MeetingsPage() {
   const startEdit = (meeting) => {
     setEditingId(meeting.id);
     setForm({
-      title: meeting.title,
+      title: meeting.title || "",
       meetingType: meeting.meetingType || "",
-      agenda: meeting.agenda,
-      scheduleDateTime: meeting.scheduleDateTime.slice(0, 16),
-      duration: meeting.duration,
-      hostId: meeting.hostId,
-      departmentIds: meeting.departmentIds,
-      internalAttendeeIds: meeting.internalAttendeeIds,
+      agenda: meeting.agenda || "",
+      scheduleDateTime: meeting.scheduleDateTime ? meeting.scheduleDateTime.slice(0, 16) : "",
+      duration: meeting.duration || 30,
+      hostId: meeting.hostId || "",
+      departmentIds: meeting.departmentIds || [],
+      internalAttendeeIds: meeting.internalAttendeeIds || [],
       externalAttendeesText: serializeExternalAttendees(meeting.externalAttendees),
+      location: meeting.location || "",
+      isVirtual: meeting.isVirtual !== undefined ? meeting.isVirtual : true,
     });
     setFeedback({ type: "", message: "" });
     setShowForm(true);
@@ -362,7 +364,7 @@ export default function MeetingsPage() {
   return (
     <>
       {isLoading && <TruckLoader />}
-      <div className={isLoading ? "invisible" : "space-y-6"}>
+      <div className={`${isLoading ? "hidden" : "block"} space-y-6`}>
       <section className="-ml-5 p-5 sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -671,6 +673,43 @@ export default function MeetingsPage() {
                     ]}
                   />
                 </Field>
+
+                <Field label="Location Type">
+                  <div className="flex gap-4">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="locationType"
+                        checked={form.isVirtual}
+                        onChange={() => setForm(prev => ({ ...prev, isVirtual: true, location: "" }))}
+                        className="h-4 w-4 text-[#2B3990] border-slate-300 focus:ring-[#2B3990]"
+                      />
+                      <span className="text-sm font-medium text-slate-700">Online (Zoom)</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="locationType"
+                        checked={!form.isVirtual}
+                        onChange={() => setForm(prev => ({ ...prev, isVirtual: false }))}
+                        className="h-4 w-4 text-[#2B3990] border-slate-300 focus:ring-[#2B3990]"
+                      />
+                      <span className="text-sm font-medium text-slate-700">In Person</span>
+                    </label>
+                  </div>
+                </Field>
+
+                {!form.isVirtual && (
+                  <Field label="Physical Location">
+                    <input
+                      required
+                      value={form.location}
+                      onChange={(event) => setForm((current) => ({ ...current, location: event.target.value }))}
+                      placeholder="e.g., Conference Room A, Floor 2"
+                      className="input-base"
+                    />
+                  </Field>
+                )}
 
                 <ChecklistGroup
                   title="Departments"

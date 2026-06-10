@@ -50,11 +50,23 @@ function buildInviteHtml({ attendeeName, meeting }) {
     duration,
     zoomJoinUrl,
     zoomPassword,
+    location,
+    isVirtual,
   } = meeting;
 
   const formattedDate = formatDateTime(scheduleDateTime);
   const formattedDuration = formatDuration(Number(duration));
   const senderName = process.env.SMTP_USER;
+
+  const locationSection = !isVirtual && location 
+    ? `<div class="detail-row">
+          <div class="detail-icon">📍</div>
+          <div>
+            <div class="detail-label">Location</div>
+            <div class="detail-value">${location}</div>
+          </div>
+        </div>`
+    : "";
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -119,6 +131,8 @@ function buildInviteHtml({ attendeeName, meeting }) {
           </div>
         </div>
 
+        ${locationSection}
+
         <div class="detail-row">
           <div class="detail-icon">🔗</div>
           <div>
@@ -163,13 +177,14 @@ function buildInviteHtml({ attendeeName, meeting }) {
 // Plain text fallback
 // ---------------------------------------------------------------------------
 function buildInviteText({ attendeeName, meeting }) {
-  const { title, agenda, scheduleDateTime, duration, zoomJoinUrl, zoomPassword } = meeting;
+  const { title, agenda, scheduleDateTime, duration, zoomJoinUrl, zoomPassword, location, isVirtual } = meeting;
   return [
     `Hi ${attendeeName || "there"},`,
     "",
     `You are invited to: ${title}`,
     `Date & Time: ${formatDateTime(scheduleDateTime)}`,
     `Duration: ${formatDuration(Number(duration))}`,
+    !isVirtual && location ? `Location: ${location}` : "",
     agenda ? `Agenda: ${agenda}` : "",
     "",
     `Join Zoom: ${zoomJoinUrl}`,
@@ -177,7 +192,7 @@ function buildInviteText({ attendeeName, meeting }) {
     "",
     "A Google Calendar invite has also been sent to your email.",
   ]
-    .filter((l) => l !== null)
+    .filter((l) => l !== "")
     .join("\n");
 }
 
@@ -251,7 +266,7 @@ export async function sendMeetingUpdateNotifications(meeting, attendees = []) {
     return;
   }
 
-  const { title, scheduleDateTime, duration, zoomJoinUrl, zoomPassword } = meeting;
+  const { title, scheduleDateTime, duration, zoomJoinUrl, zoomPassword, location, isVirtual } = meeting;
 
   const results = await Promise.allSettled(
     attendees.map((attendee) => {
@@ -270,12 +285,13 @@ export async function sendMeetingUpdateNotifications(meeting, attendees = []) {
           <ul style="margin:16px 0;line-height:2;">
             <li><strong>Date &amp; Time:</strong> ${formatDateTime(scheduleDateTime)}</li>
             <li><strong>Duration:</strong> ${formatDuration(Number(duration))}</li>
+            ${!isVirtual && location ? `<li><strong>Location:</strong> ${location}</li>` : ""}
             <li><strong>Join Link:</strong> <a href="${zoomJoinUrl}">${zoomJoinUrl}</a></li>
             ${zoomPassword ? `<li><strong>Password:</strong> ${zoomPassword}</li>` : ""}
           </ul>
           <p>Your Google Calendar invite has also been updated.</p>
         </div>`,
-        text: `Meeting Updated: ${title}\nDate: ${formatDateTime(scheduleDateTime)}\nJoin: ${zoomJoinUrl}`,
+        text: `Meeting Updated: ${title}\nDate: ${formatDateTime(scheduleDateTime)}\n${!isVirtual && location ? `Location: ${location}\n` : ""}Join: ${zoomJoinUrl}`,
       });
     })
   );
