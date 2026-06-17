@@ -134,6 +134,45 @@ export async function getEmployee(employeeId) {
   return collection.findOne({ id: employeeId });
 }
 
+/**
+ * Returns the employee who owns the Zoom account used for creating meetings.
+ * Resolution order:
+ *  1. ZOOM_HOST_EMPLOYEE_ID env var (set this to your MongoDB employee `id`)
+ *  2. First active employee in the DB (ultimate fallback)
+ */
+export async function getZoomHostEmployee() {
+  const collection = await getCollection("employees");
+  const envId = process.env.ZOOM_HOST_EMPLOYEE_ID?.trim();
+  if (envId) {
+    const emp = await collection.findOne({ id: envId });
+    if (emp) return emp;
+    console.warn(`[VAPI] ZOOM_HOST_EMPLOYEE_ID "${envId}" not found in DB — falling back.`);
+  }
+  // Fallback: first active employee alphabetically
+  return collection.findOne({ status: "active" }, { sort: { firstName: 1 } });
+}
+
+/**
+ * Returns all active employees belonging to a named department.
+ * Case-insensitive match on department name.
+ */
+export async function getEmployeesByDepartment(departmentName) {
+  const deptCollection = await getCollection("departments");
+  const empCollection = await getCollection("employees");
+
+  const dept = await deptCollection.findOne({
+    name: { $regex: new RegExp(`^${departmentName.trim()}$`, "i") },
+  });
+
+  if (!dept) return { department: null, employees: [] };
+
+  const employees = await empCollection
+    .find({ departmentId: dept.id, status: "active" })
+    .toArray();
+
+  return { department: dept, employees };
+}
+
 export async function createEmployee(payload) {
   const collection = await getCollection("employees");
   const departments = await listDepartments();

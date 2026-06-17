@@ -7,6 +7,33 @@ import Chatbot from "@/components/ui/Chatbot";
 import { useAuth } from "@/lib/AuthContext";
 import TruckLoader from "@/components/TruckLoader";
 
+// ---------------------------------------------------------------------------
+// Suppress Vapi SDK internal WebRTC/transport console.error calls so they
+// don't trigger the Next.js dev error overlay. These are handled gracefully
+// inside the Chatbot component's `on("error", ...)` handler.
+// ---------------------------------------------------------------------------
+if (typeof window !== "undefined") {
+  const _origError = console.error.bind(console);
+  console.error = (...args) => {
+    const msg = args.map(a => (typeof a === "string" ? a : String(a ?? ""))).join(" ");
+    const vapiNoise = [
+      "send transport changed",
+      "recv transport changed",
+      "transport changed to disconnected",
+      "ice connection state",
+      "pc.setRemoteDescription",
+      "vapi",
+    ];
+    if (vapiNoise.some(keyword => msg.toLowerCase().includes(keyword))) {
+      // Downgrade to a warn so it's visible in DevTools but not in the overlay
+      console.warn("[Vapi SDK internal]", ...args);
+      return;
+    }
+    _origError(...args);
+  };
+}
+
+
 function subscribeToSidebarPreference(callback) {
   window.addEventListener("storage", callback);
   window.addEventListener("sidebar-collapsed-change", callback);

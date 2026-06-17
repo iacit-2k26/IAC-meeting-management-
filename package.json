@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@mistralai/mistralai": "^2.2.5",
+    "@vapi-ai/web": "^2.5.2",
     "bcryptjs": "^3.0.3",
     "googleapis": "^173.0.0",
     "groq-sdk": "^1.2.1",
@@ -30,5 +31,8 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.7",
     "tailwindcss": "^4"
+  },
+  "overrides": {
+    "@daily-co/daily-js": "0.91.0"
   }
 }
