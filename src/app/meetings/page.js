@@ -105,24 +105,22 @@ function formatDateTime(value) {
 
 function parseExternalAttendees(text) {
   return text
-    .split("\n")
+    .replace(/\n/g, ",")
+    .split(",")
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => {
-      const parts = line.split(",").map((part) => part.trim());
-      
-      // If only an email is provided (no commas)
-      if (parts.length === 1 && parts[0].includes("@")) {
-        const email = parts[0];
-        // Use the part before @ as a temporary name
+      // If line is an email (has @)
+      if (line.includes("@")) {
+        const email = line;
         const name = email.split("@")[0].replace(/[._-]/g, " ");
         return { name, email, status: "invited" };
       }
-
-      const [name = "", email = "", status = "invited"] = parts;
-      return { name, email, status: status || "invited" };
+      
+      // If line is just a name (but we need an email for external attendees)
+      return null;
     })
-    .filter((attendee) => attendee.name && attendee.email);
+    .filter(Boolean);
 }
 
 function serializeExternalAttendees(attendees = []) {
@@ -468,6 +466,16 @@ export default function MeetingsPage() {
                   />
                 </div>
               </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const today = new Date().toISOString().split('T')[0];
+                  setDateRange({ start: today, end: today });
+                }}
+                className="px-4 py-2 bg-[#2B3990] text-white text-xs font-bold rounded-lg hover:bg-[#232e74] transition-colors shadow-sm"
+              >
+                Today
+              </button>
             </div>
           </div>
 
