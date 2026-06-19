@@ -28,10 +28,6 @@ const options = {
   }
 };
 
-console.log('Testing Vapi API endpoint...');
-console.log('URL: http://localhost:3000/api/vapi');
-console.log('Test data:', JSON.stringify(testData, null, 2));
-console.log('---');
 
 const req = http.request(options, (res) => {
   let data = '';
@@ -41,21 +37,12 @@ const req = http.request(options, (res) => {
   });
 
   res.on('end', () => {
-    console.log('Status Code:', res.statusCode);
-    console.log('Response:');
-    try {
-      console.log(JSON.stringify(JSON.parse(data), null, 2));
-    } catch (e) {
-      console.log(data);
-    }
+    // Response received
   });
 });
 
 req.on('error', (error) => {
   console.error('Error:', error.message);
-  console.log('---');
-  console.log('Make sure your Next.js dev server is running on port 3000!');
-  console.log('Start it with: npm run dev');
 });
 
 req.write(postData);

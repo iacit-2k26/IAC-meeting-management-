@@ -131,7 +131,6 @@ export async function createCalendarEvent(meeting, attendees = []) {
     });
 
     const eventId = response.data.id;
-    console.log(`[GoogleCalendar] Event created: ${eventId} — ${meeting.title}`);
     return eventId;
   } catch (error) {
     console.error("[GoogleCalendar] Failed to create event:", error.message);
@@ -171,7 +170,6 @@ export async function updateCalendarEvent(eventId, meeting, attendees = []) {
       sendUpdates: "all", // Notify all attendees of the change
     });
 
-    console.log(`[GoogleCalendar] Event updated: ${eventId} — ${meeting.title}`);
     return response.data.id;
   } catch (error) {
     if (error.code === 404) {
@@ -206,7 +204,6 @@ export async function deleteCalendarEvent(eventId) {
       sendUpdates: "all", // Notify attendees that the event is cancelled
     });
 
-    console.log(`[GoogleCalendar] Event deleted: ${eventId}`);
   } catch (error) {
     if (error.code === 404) {
       console.warn(`[GoogleCalendar] Event ${eventId} already deleted or not found.`);
@@ -243,5 +240,37 @@ export async function listCalendarEvents(timeMin, timeMax) {
   } catch (error) {
     console.error("[GoogleCalendar] Failed to list events:", error.message);
     return [];
+  }
+}
+
+/**
+ * Check free/busy times for one or more calendars/attendees.
+ *
+ * @param {string} timeMin - ISO date string for start of time range
+ * @param {string} timeMax - ISO date string for end of time range
+ * @param {Array<string>} calendarIds - Array of calendar IDs/emails to check
+ * @returns {Promise<object>} - FreeBusy response from Google
+ */
+export async function checkFreeBusy(timeMin, timeMax, calendarIds) {
+  if (!isGoogleCalendarConfigured()) {
+    console.warn("[GoogleCalendar] Credentials not configured. Skipping free/busy check.");
+    return { calendars: {} };
+  }
+
+  try {
+    const calendar = getCalendarClient();
+    const response = await calendar.freebusy.query({
+      requestBody: {
+        timeMin,
+        timeMax,
+        timeZone: "Asia/Kolkata",
+        items: calendarIds.map(id => ({ id })),
+      },
+    });
+
+    return response.data || { calendars: {} };
+  } catch (error) {
+    console.error("[GoogleCalendar] Failed to check free/busy:", error.message);
+    return { calendars: {} };
   }
 }

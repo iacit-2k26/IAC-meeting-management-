@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Calendar, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock, HelpCircle, Mail, Pencil, Plus, RefreshCw, Trash2, User, UsersRound, X, XCircle } from "lucide-react";
+import { Calendar, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock, HelpCircle, Mail, Pencil, Plus, RefreshCw, Search, Trash2, User, UsersRound, X, XCircle } from "lucide-react";
 import CustomSelect from "@/components/ui/CustomSelect";
 import DateTimePicker from "@/components/ui/DateTimePicker";
 import DatePicker from "@/components/ui/DatePicker";
@@ -84,6 +84,7 @@ const emptyForm = {
   externalAttendeesText: "",
   location: "",
   isVirtual: true,
+  attendeeSearch: "",
 };
 
 async function readResponse(response) {
@@ -200,6 +201,19 @@ export default function MeetingsPage() {
     [departments]
   );
 
+  const groupedEmployees = useMemo(() => {
+    const activeEmployees = employees.filter(e => e.status === "active");
+    const groups = {};
+    activeEmployees.forEach(emp => {
+      const deptId = emp.departmentId;
+      if (!groups[deptId]) {
+        groups[deptId] = [];
+      }
+      groups[deptId].push(emp);
+    });
+    return groups;
+  }, [employees]);
+
   const filteredMeetings = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     const list = Array.isArray(meetings) ? meetings : [];
@@ -248,6 +262,7 @@ export default function MeetingsPage() {
       externalAttendeesText: serializeExternalAttendees(meeting.externalAttendees),
       location: meeting.location || "",
       isVirtual: meeting.isVirtual !== undefined ? meeting.isVirtual : true,
+      attendeeSearch: "",
     });
     setFeedback({ type: "", message: "" });
     setShowForm(true);
@@ -634,6 +649,7 @@ export default function MeetingsPage() {
                 </Field>
                 <Field label="Agenda">
                   <textarea
+                    required
                     rows={3}
                     value={form.agenda}
                     onChange={(event) => setForm((current) => ({ ...current, agenda: event.target.value }))}
@@ -662,19 +678,22 @@ export default function MeetingsPage() {
                 </div>
                 <Field label="Host">
                   <CustomSelect
+                    searchable
                     value={form.hostId}
-                    onChange={(val) => setForm((current) => ({ ...current, hostId: val }))}
+                    onChange={(val) => setForm((current) => {
+                      return { ...current, hostId: val };
+                    })}
                     placeholder="Select a host"
                     options={[
                       { value: "", label: "Select a host" },
                       ...employees
                         .filter((e) => e.status === "active")
-                        .map((e) => ({ value: e.id, label: `${e.firstName} ${e.lastName}` })),
+                        .map((e) => ({ value: e.id, label: `${e.firstName} ${e.lastName}` }))
                     ]}
                   />
                 </Field>
 
-                <Field label="Location Type">
+                <Field label="Location Preference">
                   <div className="flex gap-4">
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
@@ -694,7 +713,7 @@ export default function MeetingsPage() {
                         onChange={() => setForm(prev => ({ ...prev, isVirtual: false }))}
                         className="h-4 w-4 text-[#2B3990] border-slate-300 focus:ring-[#2B3990]"
                       />
-                      <span className="text-sm font-medium text-slate-700">In Person</span>
+                      <span className="text-sm font-medium text-slate-700">In Person + Zoom</span>
                     </label>
                   </div>
                 </Field>
@@ -718,17 +737,106 @@ export default function MeetingsPage() {
                   onToggle={handleDepartmentToggle}
                 />
 
-                <ChecklistGroup
-                  title="Internal attendees"
-                  items={employees
-                    .filter((employee) => employee.status === "active")
-                    .map((employee) => ({
-                      id: employee.id,
-                      label: `${employee.firstName} ${employee.lastName} · ${employee.designation || employee.role}`,
-                    }))}
-                  selectedItems={form.internalAttendeeIds}
-                  onToggle={(value) => toggleArrayValue("internalAttendeeIds", value)}
-                />
+                <div>
+                  <p className="mb-2 text-sm font-semibold text-slate-700">Internal attendees</p>
+                  <div className="relative mb-2">
+                    <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Search employees..."
+                      value={form.attendeeSearch || ""}
+                      onChange={(e) => setForm(prev => ({ ...prev, attendeeSearch: e.target.value }))}
+                      className="w-full pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-1 focus:ring-[#2B3990]/30"
+                    />
+                  </div>
+                  <div className="max-h-44 space-y-3 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                    {departments.map(dept => {
+                      const deptEmployees = groupedEmployees[dept.id] || [];
+                      const searchTerm = (form.attendeeSearch || "").toLowerCase();
+                      const filteredDeptEmployees = deptEmployees.filter(emp => 
+                        `${emp.firstName} ${emp.lastName} · ${emp.designation || emp.role}`.toLowerCase().includes(searchTerm)
+                      );
+                      if (filteredDeptEmployees.length === 0) return null;
+                      
+                      return (
+                        <div key={dept.id} className="space-y-1">
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pl-1">{dept.name}</p>
+                          {filteredDeptEmployees.map(emp => {
+                            const checked = form.internalAttendeeIds.includes(emp.id);
+                            return (
+                              <button
+                                key={emp.id}
+                                type="button"
+                                onClick={() => toggleArrayValue("internalAttendeeIds", emp.id)}
+                                className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm transition-colors ${
+                                  checked
+                                    ? "bg-[#2B3990]/8 text-[#2B3990]"
+                                    : "text-slate-700 hover:bg-white"
+                                }`}
+                              >
+                                <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-all ${
+                                  checked
+                                    ? "border-[#2B3990] bg-[#2B3990]"
+                                    : "border-slate-300 bg-white"
+                                }`}>
+                                  {checked && (
+                                    <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
+                                      <path d="M1 3L3.5 5.5L8 1" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                                    </svg>
+                                  )}
+                                </span>
+                                <span className="leading-snug">{emp.firstName} {emp.lastName} · {emp.designation || emp.role}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+                    {/* Show employees without department (if any) */}
+                    {(() => {
+                      const searchTerm = (form.attendeeSearch || "").toLowerCase();
+                      const employeesWithoutDept = employees.filter(
+                        e => e.status === "active" && !e.departmentId && 
+                        `${e.firstName} ${e.lastName} · ${e.designation || e.role}`.toLowerCase().includes(searchTerm)
+                      );
+                      if (employeesWithoutDept.length === 0) return null;
+                      
+                      return (
+                        <div key="no-dept" className="space-y-1">
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pl-1">Other</p>
+                          {employeesWithoutDept.map(emp => {
+                            const checked = form.internalAttendeeIds.includes(emp.id);
+                            return (
+                              <button
+                                key={emp.id}
+                                type="button"
+                                onClick={() => toggleArrayValue("internalAttendeeIds", emp.id)}
+                                className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm transition-colors ${
+                                  checked
+                                    ? "bg-[#2B3990]/8 text-[#2B3990]"
+                                    : "text-slate-700 hover:bg-white"
+                                }`}
+                              >
+                                <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-all ${
+                                  checked
+                                    ? "border-[#2B3990] bg-[#2B3990]"
+                                    : "border-slate-300 bg-white"
+                                }`}>
+                                  {checked && (
+                                    <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
+                                      <path d="M1 3L3.5 5.5L8 1" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                                    </svg>
+                                  )}
+                                </span>
+                                <span className="leading-snug">{emp.firstName} {emp.lastName} · {emp.designation || emp.role}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
 
                 <Field label="External attendees">
                   <textarea
@@ -1126,15 +1234,36 @@ function Field({ label, children }) {
   );
 }
 
-function ChecklistGroup({ title, items, selectedItems, onToggle }) {
+function ChecklistGroup({ title, items, selectedItems, onToggle, searchable = false }) {
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredItems = useMemo(() => {
+    if (!searchable) return items;
+    return items.filter(item =>
+      item.label.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [items, searchable, searchQuery]);
+
   return (
     <div>
       <p className="mb-2 text-sm font-semibold text-slate-700">{title}</p>
+      {searchable && (
+        <div className="mb-2 relative">
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-1 focus:ring-[#2B3990]/30"
+          />
+        </div>
+      )}
       <div className="max-h-44 space-y-1 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50/60 p-2">
-        {items.length === 0 && (
-          <p className="py-2 text-center text-xs text-slate-400 italic">No items available.</p>
+        {filteredItems.length === 0 && (
+          <p className="py-2 text-center text-xs text-slate-400 italic">No items found.</p>
         )}
-        {items.map((item) => {
+        {filteredItems.map((item) => {
           const checked = selectedItems.includes(item.id);
           return (
             <button

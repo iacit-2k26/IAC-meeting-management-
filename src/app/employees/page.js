@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Building2, Mail, Pencil, Plus, ShieldCheck, Trash2, Upload, UserSquare2, X, FileSpreadsheet, AlertCircle, CheckCircle2 } from "lucide-react";
+import * as XLSX from "xlsx";
 import StatCard from "@/components/ui/StatCard";
 import CustomSelect from "@/components/ui/CustomSelect";
 import TruckLoader from "@/components/TruckLoader";
@@ -53,9 +54,12 @@ export default function EmployeesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [feedback, setFeedback] = useState({ type: "", message: "" });
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState([]);
 
   // Delete modal state
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, employee: null, isDeleting: false });
+  // Bulk delete modal state
+  const [bulkDeleteModal, setBulkDeleteModal] = useState({ isOpen: false, isDeleting: false });
 
   // Excel import state
   const fileInputRef = useRef(null);
@@ -210,7 +214,6 @@ export default function EmployeesPage() {
     event.target.value = "";
 
     try {
-      const XLSX = (await import("xlsx")).default;
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data, { type: "array" });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -235,6 +238,7 @@ export default function EmployeesPage() {
         };
       }).filter((row) => row.employeeId || row.firstName || row.email);
 
+      // Open the modal with the processed rows
       setImportModal({ isOpen: true, rows, isImporting: false, result: null });
     } catch (err) {
       setFeedback({ type: "error", message: `Failed to read Excel file: ${err.message}` });
@@ -244,10 +248,21 @@ export default function EmployeesPage() {
   const handleImportConfirm = async () => {
     setImportModal((prev) => ({ ...prev, isImporting: true }));
     try {
+      // Map department names to IDs
+      const departmentNameToIdMap = Object.fromEntries(
+        departments.map((d) => [d.name.toLowerCase(), d.id])
+      );
+
+      const rowsWithMappedDepartments = importModal.rows.map((row) => {
+        const departmentName = row.departmentId?.trim().toLowerCase();
+        const mappedDepartmentId = departmentNameToIdMap[departmentName] || row.departmentId;
+        return { ...row, departmentId: mappedDepartmentId };
+      });
+
       const response = await fetch("/api/employees/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ employees: importModal.rows }),
+        body: JSON.stringify({ employees: rowsWithMappedDepartments }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "Import failed.");
@@ -261,6 +276,45 @@ export default function EmployeesPage() {
 
   const closeImportModal = () => {
     setImportModal({ isOpen: false, rows: [], isImporting: false, result: null });
+  };
+
+  const toggleEmployeeSelection = (employeeId) => {
+    setSelectedEmployeeIds(prev => 
+      prev.includes(employeeId) 
+        ? prev.filter(id => id !== employeeId) 
+        : [...prev, employeeId]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedEmployeeIds.length === filteredEmployees.length) {
+      setSelectedEmployeeIds([]);
+    } else {
+      setSelectedEmployeeIds(filteredEmployees.map(emp => emp.id));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    setBulkDeleteModal(prev => ({ ...prev, isDeleting: true }));
+    try {
+      console.log("Deleting employees with IDs:", selectedEmployeeIds);
+      const response = await fetch("/api/employees", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ employeeIds: selectedEmployeeIds }),
+      });
+      await readResponse(response);
+      await loadData(true);
+      setSelectedEmployeeIds([]);
+      setFeedback({ type: "success", message: "Selected employees deleted successfully." });
+      setBulkDeleteModal({ isOpen: false, isDeleting: false });
+    } catch (error) {
+      console.error("Bulk delete failed:", error);
+      setFeedback({ type: "error", message: error.message });
+      setBulkDeleteModal(prev => ({ ...prev, isDeleting: false }));
+    }
   };
 
   return (
@@ -283,13 +337,16 @@ export default function EmployeesPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".xlsx,.xls,.csv"
-              className="hidden"
-              onChange={handleExcelFile}
-            />
+            {selectedEmployeeIds.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setBulkDeleteModal({ isOpen: true, isDeleting: false })}
+                className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 shadow-sm transition hover:bg-red-100"
+              >
+                <Trash2 size={16} />
+                Delete {selectedEmployeeIds.length} Selected
+              </button>
+            )}
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
@@ -298,6 +355,13 @@ export default function EmployeesPage() {
               <Upload size={16} />
               Import from Excel
             </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              className="hidden"
+              onChange={handleExcelFile}
+            />
             <button
               type="button"
               onClick={startCreate}
@@ -345,6 +409,14 @@ export default function EmployeesPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-[40px]">
+                  <input
+                    type="checkbox"
+                    checked={filteredEmployees.length > 0 && selectedEmployeeIds.length === filteredEmployees.length}
+                    onChange={toggleSelectAll}
+                    className="h-4 w-4 rounded border-gray-300 text-[#2B3990] focus:ring-[#2B3990]"
+                  />
+                </TableHead>
                 <TableHead className="w-[5%]">ID</TableHead>
                 <TableHead className="w-[18%]">Name</TableHead>
                 <TableHead className="w-[18%]">Email</TableHead>
@@ -358,13 +430,21 @@ export default function EmployeesPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center text-slate-500">
+                  <TableCell colSpan={9} className="text-center text-slate-500">
                     Loading employees...
                   </TableCell>
                 </TableRow>
               ) : filteredEmployees.length > 0 ? (
                 filteredEmployees.map((employee) => (
                   <TableRow key={employee.id}>
+                    <TableCell>
+                      <input
+                        type="checkbox"
+                        checked={selectedEmployeeIds.includes(employee.id)}
+                        onChange={() => toggleEmployeeSelection(employee.id)}
+                        className="h-4 w-4 rounded border-gray-300 text-[#2B3990] focus:ring-[#2B3990]"
+                      />
+                    </TableCell>
                     <TableCell className="font-mono text-xs text-slate-500">{employee.employeeId}</TableCell>
                     <TableCell>
                       <p className="font-semibold text-slate-800">
@@ -386,19 +466,21 @@ export default function EmployeesPage() {
                     <TableCell>
                       <div className="flex gap-2">
                         <ActionButton icon={Pencil} label="Edit" onClick={() => startEdit(employee)} />
-                        <ActionButton
-                          icon={Trash2}
-                          label="Delete"
-                          danger
-                          onClick={() => removeEmployee(employee)}
-                        />
+                        {/* {selectedEmployeeIds.length === 0 && (
+                          <ActionButton
+                            icon={Trash2}
+                            label="Delete"
+                            danger
+                            onClick={() => removeEmployee(employee)}
+                          />
+                        )} */}
                       </div>
                     </TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center text-slate-500">
+                  <TableCell colSpan={9} className="text-center text-slate-500">
                     No employees match the current filters.
                   </TableCell>
                 </TableRow>
@@ -406,9 +488,10 @@ export default function EmployeesPage() {
             </TableBody>
           </Table>
         </section>
+    </div>
 
-      {/* ── Employee form modal ── */}
-      {showForm && (
+    {/* ── Employee form modal ── */}
+    {showForm && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
           <div
             className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
@@ -537,25 +620,33 @@ export default function EmployeesPage() {
         </div>
       )}
 
-      <DeleteConfirmationModal
-        isOpen={deleteModal.isOpen}
-        onClose={() => setDeleteModal({ isOpen: false, employee: null, isDeleting: false })}
-        onConfirm={handleConfirmDelete}
-        isLoading={deleteModal.isDeleting}
-        title="Delete Employee"
-        message={`Are you sure you want to delete ${deleteModal.employee?.firstName} ${deleteModal.employee?.lastName}? This action cannot be undone.`}
-      />
+    <DeleteConfirmationModal
+      isOpen={deleteModal.isOpen}
+      onClose={() => setDeleteModal({ isOpen: false, employee: null, isDeleting: false })}
+      onConfirm={handleConfirmDelete}
+      isLoading={deleteModal.isDeleting}
+      title="Delete Employee"
+      message={`Are you sure you want to delete ${deleteModal.employee?.firstName} ${deleteModal.employee?.lastName}? This action cannot be undone.`}
+    />
 
-      <ExcelImportModal
-        isOpen={importModal.isOpen}
-        rows={importModal.rows}
-        isImporting={importModal.isImporting}
-        result={importModal.result}
-        departments={departments}
-        onConfirm={handleImportConfirm}
-        onClose={closeImportModal}
-      />
-    </div>
+    <DeleteConfirmationModal
+      isOpen={bulkDeleteModal.isOpen}
+      onClose={() => setBulkDeleteModal({ isOpen: false, isDeleting: false })}
+      onConfirm={handleBulkDelete}
+      isLoading={bulkDeleteModal.isDeleting}
+      title="Delete Employees"
+      message={`Are you sure you want to delete ${selectedEmployeeIds.length} employees? This action cannot be undone.`}
+    />
+
+    <ExcelImportModal
+      isOpen={importModal.isOpen}
+      rows={importModal.rows}
+      isImporting={importModal.isImporting}
+      result={importModal.result}
+      departments={departments}
+      onConfirm={handleImportConfirm}
+      onClose={closeImportModal}
+    />
     </>
   );
 }
@@ -564,6 +655,9 @@ function ExcelImportModal({ isOpen, rows, isImporting, result, departments, onCo
   if (!isOpen) return null;
 
   const departmentMap = Object.fromEntries(departments.map((d) => [d.id, d.name]));
+  const departmentNameToIdMap = Object.fromEntries(
+    departments.map((d) => [d.name.toLowerCase(), d.id])
+  );
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -656,7 +750,7 @@ function ExcelImportModal({ isOpen, rows, isImporting, result, departments, onCo
                           <td className="py-2 pr-3 text-slate-500">{row.email}</td>
                           <td className="py-2 pr-3 text-slate-500">{row.designation || "—"}</td>
                           <td className="py-2 pr-3 text-slate-500">
-                            {departmentMap[row.departmentId] || row.departmentId || "—"}
+                            {departmentMap[row.departmentId] || departmentMap[departmentNameToIdMap[row.departmentId?.toLowerCase()]] || row.departmentId || "—"}
                           </td>
                           <td className="py-2">
                             <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${row.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>

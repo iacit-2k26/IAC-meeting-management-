@@ -7,7 +7,7 @@ import Vapi from "@vapi-ai/web";
 export default function Chatbot() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
-    { role: "bot", text: "Hello! I'm your Meeting Assistant. You can type or talk to me to manage your schedule." }
+    { role: "bot", text: "Hey! I'm your meeting assistant for IAC Meeting Central. Need to check your calendar or schedule something?" }
   ]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -39,7 +39,6 @@ export default function Chatbot() {
       vapiRef.current = new Vapi(process.env.NEXT_PUBLIC_VAPI_PUBLIC_KEY);
 
       vapiRef.current.on("call-start", () => {
-        console.log("[Vapi] Call started");
         setVapiCallActive(true);
         setVapiStatus("connected");
         setVapiError(null);
@@ -48,7 +47,6 @@ export default function Chatbot() {
       });
 
       vapiRef.current.on("call-end", () => {
-        console.log("[Vapi] Call ended");
         setVapiCallActive(false);
         setIsListening(false);
         setVapiStatus("idle");
@@ -58,8 +56,6 @@ export default function Chatbot() {
       vapiRef.current.on("speech-end",   () => setIsListening(false));
 
       vapiRef.current.on("message", (message) => {
-        console.log("[Vapi Message Received]:", message);
-
         if (message.type === "transcript") {
           const isUser = message.role === "user";
           const displayRole = isUser ? "You" : "AI";
@@ -275,7 +271,6 @@ export default function Chatbot() {
     try {
       setVapiStatus("connecting");
       setVapiError(null);
-      console.log("[Vapi] Starting call with assistant:", assistantId);
       await vapiRef.current?.start(assistantId);
     } catch (e) {
       console.warn("[Vapi] Failed to start call:", e);

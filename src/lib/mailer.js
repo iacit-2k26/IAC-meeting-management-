@@ -248,7 +248,6 @@ export async function sendMeetingInvitations(meeting, attendees = []) {
   }
 
   const successCount = results.length - failures.length;
-  console.log(`[Mailer] Sent ${successCount}/${attendees.length} invitation emails successfully.`);
 }
 
 /**

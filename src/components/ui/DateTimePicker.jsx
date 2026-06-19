@@ -13,10 +13,16 @@ const MONTHS = [
 function CustomDropdown({ value, options, onChange, label, width = "w-full" }) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
+  const triggerRef = useRef(null);
+  const [dropdownCoords, setDropdownCoords] = useState(null);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        const dropdownElements = document.querySelectorAll('.custom-time-dropdown');
+        for (const el of dropdownElements) {
+          if (el.contains(event.target)) return;
+        }
         setIsOpen(false);
       }
     };
@@ -24,37 +30,69 @@ function CustomDropdown({ value, options, onChange, label, width = "w-full" }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    if (!isOpen) {
+      setDropdownCoords(null);
+      return;
+    }
+    if (!triggerRef.current) return;
+    
+    const rect = triggerRef.current.getBoundingClientRect();
+    setDropdownCoords({
+      top: rect.bottom + window.scrollY + 4,
+      left: rect.left + window.scrollX,
+      width: rect.width,
+    });
+  }, [isOpen]);
+
   const selectedOption = options.find((opt) => String(opt.value) === String(value));
+
+  const dropdownContent = dropdownCoords ? (
+    <div 
+      className="custom-time-dropdown bg-white border border-slate-200 rounded-lg shadow-xl max-h-32 overflow-y-auto"
+      style={{ 
+        position: 'absolute', 
+        top: dropdownCoords.top, 
+        left: dropdownCoords.left, 
+        width: dropdownCoords.width,
+        zIndex: 2147483647
+      }}
+    >
+      {options.map((opt) => (
+        <div
+          key={opt.value}
+          onMouseDown={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            onChange(opt.value);
+            setIsOpen(false);
+          }}
+          className={`px-3 py-2 text-xs cursor-pointer transition-colors ${
+            String(opt.value) === String(value) ? "bg-[#2B3990] text-white font-bold hover:bg-[#232e74]" : "text-slate-700 hover:bg-slate-50"
+          }`}
+        >
+          {opt.label}
+        </div>
+      ))}
+    </div>
+  ) : null;
 
   return (
     <div className={`relative ${width}`} ref={dropdownRef}>
       <label className="text-[9px] text-slate-400 font-bold uppercase ml-1 mb-1 block">{label}</label>
       <div
-        onClick={() => setIsOpen(!isOpen)}
+        ref={triggerRef}
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsOpen(!isOpen);
+        }}
         className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-medium cursor-pointer hover:border-[#2B3990]/30 transition-all"
       >
         <span>{selectedOption?.label || value}</span>
         <ChevronDown size={12} className={`text-slate-400 transition-transform ${isOpen ? "rotate-180" : ""}`} />
       </div>
 
-      {isOpen && (
-        <div className="absolute z-[10000] bottom-full mb-1 w-full bg-white border border-slate-200 rounded-lg shadow-xl max-h-40 overflow-y-auto">
-          {options.map((opt) => (
-            <div
-              key={opt.value}
-              onClick={() => {
-                onChange(opt.value);
-                setIsOpen(false);
-              }}
-              className={`px-3 py-2 text-xs cursor-pointer hover:bg-slate-50 transition-colors ${
-                String(opt.value) === String(value) ? "bg-[#2B3990] text-white font-bold hover:bg-[#2B3990]" : "text-slate-700"
-              }`}
-            >
-              {opt.label}
-            </div>
-          ))}
-        </div>
-      )}
+      {isOpen && typeof document !== "undefined" && createPortal(dropdownContent, document.body)}
     </div>
   );
 }
@@ -62,7 +100,7 @@ function CustomDropdown({ value, options, onChange, label, width = "w-full" }) {
 export default function DateTimePicker({ value, onChange, placeholder = "Select date and time" }) {
   const [isOpen, setIsOpen] = useState(false);
   const [step, setStep] = useState("date");
-  const [popoverCoords, setPopoverCoords] = useState({ top: 0, left: 0, width: 0 });
+  const [popoverCoords, setPopoverCoords] = useState(null);
   const containerRef = useRef(null);
   const triggerRef = useRef(null);
 
@@ -70,20 +108,23 @@ export default function DateTimePicker({ value, onChange, placeholder = "Select 
   const [viewDate, setViewDate] = useState(new Date(selectedDate));
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      setPopoverCoords(null);
+      return;
+    }
     if (!triggerRef.current) return;
 
     const updatePosition = () => {
       if (!triggerRef.current) return;
       const rect = triggerRef.current.getBoundingClientRect();
-      const popoverH = 340; // approx height of the calendar popover
+      const popoverH = 340; 
       const spaceBelow = window.innerHeight - rect.bottom;
       const openUpward = spaceBelow < popoverH && rect.top > spaceBelow;
 
       setPopoverCoords(
         openUpward
-          ? { bottom: window.innerHeight - rect.top + 4, left: rect.left }
-          : { top: rect.bottom + 4, left: rect.left }
+          ? { bottom: window.innerHeight - rect.top + 4, left: rect.left, width: rect.width }
+          : { top: rect.bottom + 4, left: rect.left, width: rect.width }
       );
     };
 
@@ -98,11 +139,20 @@ export default function DateTimePicker({ value, onChange, placeholder = "Select 
 
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (containerRef.current && !containerRef.current.contains(event.target)) {
-        const popover = document.getElementById("datetime-picker-popover");
-        if (popover && popover.contains(event.target)) return;
-        setIsOpen(false);
+      // Check if click is inside main container
+      if (containerRef.current && containerRef.current.contains(event.target)) return;
+      
+      // Check if click is inside main popover
+      const popover = document.getElementById("datetime-picker-popover");
+      if (popover && popover.contains(event.target)) return;
+      
+      // Check if click is inside any custom dropdown (from time picker)
+      const customDropdowns = document.querySelectorAll('.custom-time-dropdown');
+      for (const dropdown of customDropdowns) {
+        if (dropdown.contains(event.target)) return;
       }
+      
+      setIsOpen(false);
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -203,14 +253,15 @@ export default function DateTimePicker({ value, onChange, placeholder = "Select 
     return cells;
   };
 
-  const popoverContent = (
+  const popoverContent = popoverCoords ? (
     <div
       id="datetime-picker-popover"
-      className="fixed z-[9999] p-4 bg-white border border-slate-200 rounded-xl shadow-[0_8px_40px_rgba(0,0,0,0.15)] w-[280px]"
+      className="fixed z-[9999] p-4 bg-white border border-slate-200 rounded-xl shadow-[0_8px_40px_rgba(0,0,0,0.15)]"
       style={{
         top: popoverCoords.top !== undefined ? `${popoverCoords.top}px` : undefined,
         bottom: popoverCoords.bottom !== undefined ? `${popoverCoords.bottom}px` : undefined,
         left: `${popoverCoords.left}px`,
+        width: `${popoverCoords.width}px`,
       }}
     >
       <div className="flex flex-col gap-3">
@@ -323,7 +374,7 @@ export default function DateTimePicker({ value, onChange, placeholder = "Select 
         )}
       </div>
     </div>
-  );
+  ) : null;
 
   return (
     <div className="relative w-full" ref={containerRef}>

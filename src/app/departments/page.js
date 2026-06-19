@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { BriefcaseBusiness, Building2, Pencil, Plus, Trash2, Users, X } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { BriefcaseBusiness, Building2, Pencil, Plus, Trash2, Users, X, Mail } from "lucide-react";
 import StatCard from "@/components/ui/StatCard";
 import CustomSelect from "@/components/ui/CustomSelect";
 import TruckLoader from "@/components/TruckLoader";
@@ -43,6 +43,7 @@ export default function DepartmentsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [feedback, setFeedback] = useState({ type: "", message: "" });
+  const [expandedDepartmentId, setExpandedDepartmentId] = useState(null);
 
   // Delete modal state
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, department: null, isDeleting: false });
@@ -260,33 +261,92 @@ export default function DepartmentsPage() {
                 </TableRow>
               ) : filteredDepartments.length > 0 ? (
                 filteredDepartments.map((department) => (
-                  <TableRow key={department.id}>
-                    <TableCell>
-                      <p className="font-semibold text-slate-800">{department.name}</p>
-                    </TableCell>
-                    <TableCell>
-                      <p className="text-sm text-slate-500 line-clamp-2">{department.description || "—"}</p>
-                    </TableCell>
-                    <TableCell className="text-sm text-slate-700">{department.head || "—"}</TableCell>
-                    <TableCell className="text-sm font-semibold text-slate-700">{employeesByDepartment[department.id] || 0}</TableCell>
-                    <TableCell>
-                      <StatusBadge
-                        status={department.status}
-                        color={department.status === "active" ? "#16a34a" : "#94a3b8"}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <ActionButton icon={Pencil} label="Edit" onClick={() => startEdit(department)} />
-                        <ActionButton
-                          icon={Trash2}
-                          label="Delete"
-                          danger
-                          onClick={() => removeDepartment(department)}
+                  <React.Fragment key={department.id}>
+                    <TableRow 
+                      className="cursor-pointer hover:bg-slate-50"
+                      onClick={(e) => {
+                        // Don't expand if clicking on action buttons
+                        if (e.target.closest('button')) return;
+                        setExpandedDepartmentId(expandedDepartmentId === department.id ? null : department.id);
+                      }}
+                    >
+                      <TableCell>
+                        <p className="font-semibold text-slate-800">{department.name}</p>
+                      </TableCell>
+                      <TableCell>
+                        <p className="text-sm text-slate-500 line-clamp-2">{department.description || "—"}</p>
+                      </TableCell>
+                      <TableCell className="text-sm text-slate-700">{department.head || "—"}</TableCell>
+                      <TableCell className="text-sm font-semibold text-slate-700">{employeesByDepartment[department.id] || 0}</TableCell>
+                      <TableCell>
+                        <StatusBadge
+                          status={department.status}
+                          color={department.status === "active" ? "#16a34a" : "#94a3b8"}
                         />
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <ActionButton icon={Pencil} label="Edit" onClick={(e) => { e.stopPropagation(); startEdit(department); }} />
+                          <ActionButton
+                            icon={Trash2}
+                            label="Delete"
+                            danger
+                            onClick={(e) => { e.stopPropagation(); removeDepartment(department); }}
+                          />
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                    {expandedDepartmentId === department.id && (
+                      <TableRow>
+                        <TableCell colSpan={6} className="bg-slate-50 border-t border-slate-100">
+                          <div className="px-4 py-3">
+                            <h3 className="text-sm font-semibold text-slate-700 mb-3">Department Members</h3>
+                            {employees.filter(emp => emp.departmentId === department.id).length > 0 ? (
+                              <div className="overflow-x-auto">
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow>
+                                      <TableHead className="w-[10%]">ID</TableHead>
+                                      <TableHead className="w-[25%]">Name</TableHead>
+                                      <TableHead className="w-[25%]">Email</TableHead>
+                                      <TableHead className="w-[20%]">Designation</TableHead>
+                                      <TableHead className="w-[10%]">Reports to</TableHead>
+                                      <TableHead className="w-[10%]">Status</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {employees.filter(emp => emp.departmentId === department.id).map((emp) => (
+                                      <TableRow key={emp.id}>
+                                        <TableCell className="font-mono text-xs text-slate-500">{emp.employeeId}</TableCell>
+                                        <TableCell>
+                                          <p className="font-semibold text-slate-800">
+                                            {emp.firstName} {emp.lastName}
+                                          </p>
+                                        </TableCell>
+                                        <TableCell>
+                                          <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                                            <Mail size={12} className="shrink-0" />
+                                            <span className="truncate max-w-[160px]">{emp.email}</span>
+                                          </div>
+                                        </TableCell>
+                                        <TableCell className="text-sm text-slate-600">{emp.designation || "—"}</TableCell>
+                                        <TableCell className="text-sm text-slate-600">{emp.reportingTo || "—"}</TableCell>
+                                        <TableCell>
+                                          <StatusBadge status={emp.status} color={emp.status === "active" ? "#16a34a" : "#94a3b8"} />
+                                        </TableCell>
+                                      </TableRow>
+                                    ))}
+                                  </TableBody>
+                                </Table>
+                              </div>
+                            ) : (
+                              <p className="text-sm text-slate-500">No members in this department yet.</p>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </React.Fragment>
                 ))
               ) : (
                 <TableRow>

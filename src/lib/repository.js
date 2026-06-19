@@ -98,8 +98,8 @@ function validateDepartmentPayload(payload) {
 }
 
 function validateMeetingPayload(payload) {
-  if (!payload.title || !payload.hostId || !payload.scheduleDateTime || !payload.duration) {
-    throw new Error("Meeting title, host, schedule, and duration are required.");
+  if (!payload.title || !payload.hostId || !payload.scheduleDateTime || !payload.duration || !payload.agenda) {
+    throw new Error("Meeting title, host, schedule, duration, and agenda are required.");
   }
 }
 
@@ -258,6 +258,32 @@ export async function deleteEmployee(employeeId) {
   );
 }
 
+export async function deleteEmployees(employeeIds) {
+  const collection = await getCollection("employees");
+  const meetingsCollection = await getCollection("meetings");
+
+  // Check if any of the employees are hosts on meetings
+  const hasHostingEmployees = await meetingsCollection.findOne({ hostId: { $in: employeeIds } });
+  if (hasHostingEmployees) {
+    throw new Error("One or more selected employees are assigned as hosts on meetings.");
+  }
+
+  // Delete the employees
+  const result = await collection.deleteMany({ id: { $in: employeeIds } });
+
+  if (result.deletedCount === 0) {
+    throw new Error("No employees found to delete.");
+  }
+
+  // Remove them from internalAttendeeIds in all meetings
+  await meetingsCollection.updateMany(
+    {},
+    { $pull: { internalAttendeeIds: { $in: employeeIds } } }
+  );
+
+  return { deletedCount: result.deletedCount };
+}
+
 export async function listDepartments() {
   const collection = await getCollection("departments");
   return collection.find({}).toArray();
@@ -312,13 +338,17 @@ export async function deleteDepartment(departmentId) {
   const employeesCollection = await getCollection("employees");
   const meetingsCollection = await getCollection("meetings");
 
-  if (await employeesCollection.findOne({ departmentId: departmentId })) {
-    throw new Error("Cannot delete a department with linked employees.");
-  }
+  // Unlink employees from this department
+  await employeesCollection.updateMany(
+    { departmentId: departmentId },
+    { $set: { departmentId: "" } }
+  );
 
-  if (await meetingsCollection.findOne({ departmentIds: departmentId })) {
-    throw new Error("Cannot delete a department linked to meetings.");
-  }
+  // Remove departmentId from meetings' departmentIds arrays
+  await meetingsCollection.updateMany(
+    { departmentIds: departmentId },
+    { $pull: { departmentIds: departmentId } }
+  );
 
   const result = await collection.deleteOne({ id: departmentId });
 
