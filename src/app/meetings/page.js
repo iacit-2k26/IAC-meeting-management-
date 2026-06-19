@@ -78,7 +78,7 @@ const emptyForm = {
   agenda: "",
   scheduleDateTime: "",
   duration: 30,
-  hostId: "",
+  hostId: "emp-f6c99bd2",
   departmentIds: [],
   internalAttendeeIds: [],
   externalAttendeesText: "",
@@ -86,6 +86,70 @@ const emptyForm = {
   isVirtual: true,
   attendeeSearch: "",
 };
+
+// Meeting templates
+const MEETING_TEMPLATES = [
+  {
+    name: "Weekly Review",
+    data: {
+      title: "",
+      meetingType: "Weekly review meeting",
+      agenda: "",
+      duration: 60,
+      isVirtual: true,
+    }
+  },
+  {
+    name: "Monthly Review",
+    data: {
+      title: "",
+      meetingType: "Monthly review meeting",
+      agenda: "",
+      duration: 90,
+      isVirtual: true,
+    }
+  },
+  {
+    name: "Committee Meeting",
+    data: {
+      title: "",
+      meetingType: "Committee meeting",
+      agenda: "",
+      duration: 60,
+      isVirtual: true,
+    }
+  },
+  {
+    name: "Urgent Department Meeting",
+    data: {
+      title: "",
+      meetingType: "Urgent dept meeting",
+      agenda: "",
+      duration: 30,
+      isVirtual: true,
+    }
+  },
+  {
+    name: "Cross-Department Meeting",
+    data: {
+      title: "",
+      meetingType: "Cross dept meeting",
+      agenda: "",
+      duration: 60,
+      isVirtual: true,
+    }
+  },
+  {
+    name: "External Meeting",
+    data: {
+      title: "",
+      meetingType: "External meeting",
+      agenda: "",
+      duration: 45,
+      isVirtual: true,
+    }
+  },
+];
 
 async function readResponse(response) {
   const payload = await response.json();
@@ -567,7 +631,7 @@ export default function MeetingsPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-2">
-                        {!meeting.isVirtual && (
+                        {meeting.hostId !== "external" && (
                           <>
                             <ActionButton icon={Pencil} label="Edit" onClick={() => startEdit(meeting)} />
                             <ActionButton
@@ -578,7 +642,15 @@ export default function MeetingsPage() {
                             />
                           </>
                         )}
-                        {meeting.isVirtual && (
+                        {meeting.hostId === "external" && meeting.id.startsWith("gcal-") && (
+                          <ActionButton
+                            icon={Trash2}
+                            label="Delete"
+                            danger
+                            onClick={() => removeMeeting(meeting)}
+                          />
+                        )}
+                        {meeting.hostId === "external" && !meeting.id.startsWith("gcal-") && (
                           <span className="text-xs text-slate-400 italic">External Event</span>
                         )}
                       </div>
@@ -596,37 +668,37 @@ export default function MeetingsPage() {
           </Table>
         </section>
 
-      {/* ── Meeting form modal ── */}
+     {/* ── Meeting form modal ── */}
       {showForm && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div
             className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
             onClick={resetForm}
           />
-          <div className="relative w-full max-w-xl max-h-[90vh] flex flex-col">
-            <form onSubmit={submitForm} className="relative rounded-2xl border border-slate-200 bg-white shadow-2xl flex flex-col max-h-[90vh]">
+          <div className="relative w-full max-w-5xl max-h-[85vh] flex flex-col">
+            <form onSubmit={submitForm} className="relative rounded-2xl border border-slate-200 bg-white shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
               {/* Fixed header */}
-              <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-slate-100 shrink-0">
+              <div className="flex items-center justify-between px-4 pt-3 pb-2.5 border-b border-slate-100 shrink-0">
                 <div>
-                  <h2 className="text-lg font-bold text-slate-900">
+                  <h2 className="text-base font-bold text-slate-900">
                     {editingId ? "Edit meeting" : "Create meeting"}
                   </h2>
-                  <p className="text-sm text-slate-500">Meetings are automatically synchronized with enterprise conferencing APIs.</p>
+                  <p className="text-xs text-slate-500">Meetings are automatically synchronized with enterprise conferencing APIs.</p>
                 </div>
                 <button
                   type="button"
                   onClick={resetForm}
                   className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
                 >
-                  <X size={20} />
+                  <X size={18} />
                 </button>
               </div>
 
               {/* Scrollable body */}
-              <div className="overflow-y-auto px-6 py-4 space-y-4 flex-1">
+              <div className="overflow-y-auto px-4 py-3 space-y-2.5 flex-1 min-h-0">
                 {feedback.message && (
                   <div
-                    className={`rounded-2xl border px-4 py-3 text-sm ${
+                    className={`rounded-xl border px-3 py-2 text-sm ${
                       feedback.type === "error"
                         ? "border-red-200 bg-red-50 text-red-700"
                         : "border-emerald-200 bg-emerald-50 text-emerald-700"
@@ -636,37 +708,59 @@ export default function MeetingsPage() {
                   </div>
                 )}
 
-                <Field label="Meeting title">
-                  <input
-                    required
-                    value={form.title}
-                    onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
-                    className="input-base"
-                  />
-                </Field>
-                <Field label="Meeting type (optional)">
-                  <CustomSelect
-                    value={form.meetingType}
-                    onChange={(val) => setForm((current) => ({ ...current, meetingType: val }))}
-                    placeholder="— None —"
-                    options={[
-                      { value: "", label: "— None —" },
-                      ...MEETING_TYPES.map((t) => ({ value: t, label: t })),
-                    ]}
-                  />
-                </Field>
+                {/* Template Selection */}
+                <div>
+                  <p className="mb-1.5 text-xs font-semibold text-slate-700">Use a template (optional)</p>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-1.5">
+                    {MEETING_TEMPLATES.map((template, index) => (
+                      <button
+                        key={index}
+                        type="button"
+                        onClick={() => setForm(prev => ({
+                          ...prev,
+                          ...template.data
+                        }))}
+                        className="px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 hover:border-slate-300 transition-colors"
+                      >
+                        {template.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid gap-3 lg:grid-cols-3">
+                  <Field label="Meeting title" className="lg:col-span-2">
+                    <input
+                      required
+                      value={form.title}
+                      onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
+                      className="input-base"
+                    />
+                  </Field>
+                  <Field label="Meeting type (optional)">
+                    <CustomSelect
+                      value={form.meetingType}
+                      onChange={(val) => setForm((current) => ({ ...current, meetingType: val }))}
+                      placeholder="— None —"
+                      options={[
+                        { value: "", label: "— None —" },
+                        ...MEETING_TYPES.map((t) => ({ value: t, label: t })),
+                      ]}
+                    />
+                  </Field>
+                </div>
                 <Field label="Agenda">
                   <textarea
                     required
-                    rows={3}
+                    rows={2}
                     value={form.agenda}
                     onChange={(event) => setForm((current) => ({ ...current, agenda: event.target.value }))}
                     placeholder="Provide a brief description or agenda for the meeting."
                     className="input-base"
                   />
                 </Field>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Field label="Schedule">
+                <div className="grid gap-3 lg:grid-cols-4">
+                  <Field label="Schedule" className="lg:col-span-2">
                     <DateTimePicker
                       value={form.scheduleDateTime}
                       onChange={(e) => setForm((current) => ({ ...current, scheduleDateTime: e.target.value }))}
@@ -683,172 +777,177 @@ export default function MeetingsPage() {
                       className="input-base"
                     />
                   </Field>
-                </div>
-                <Field label="Host">
-                  <CustomSelect
-                    searchable
-                    value={form.hostId}
-                    onChange={(val) => setForm((current) => {
-                      return { ...current, hostId: val };
-                    })}
-                    placeholder="Select a host"
-                    options={[
-                      { value: "", label: "Select a host" },
-                      ...employees
-                        .filter((e) => e.status === "active")
-                        .map((e) => ({ value: e.id, label: `${e.firstName} ${e.lastName}` }))
-                    ]}
-                  />
-                </Field>
-
-                <Field label="Location Preference">
-                  <div className="flex gap-4">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="locationType"
-                        checked={form.isVirtual}
-                        onChange={() => setForm(prev => ({ ...prev, isVirtual: true, location: "" }))}
-                        className="h-4 w-4 text-[#2B3990] border-slate-300 focus:ring-[#2B3990]"
-                      />
-                      <span className="text-sm font-medium text-slate-700">Online (Zoom)</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="locationType"
-                        checked={!form.isVirtual}
-                        onChange={() => setForm(prev => ({ ...prev, isVirtual: false }))}
-                        className="h-4 w-4 text-[#2B3990] border-slate-300 focus:ring-[#2B3990]"
-                      />
-                      <span className="text-sm font-medium text-slate-700">In Person + Zoom</span>
-                    </label>
-                  </div>
-                </Field>
-
-                {!form.isVirtual && (
-                  <Field label="Physical Location">
-                    <input
-                      required
-                      value={form.location}
-                      onChange={(event) => setForm((current) => ({ ...current, location: event.target.value }))}
-                      placeholder="e.g., Conference Room A, Floor 2"
-                      className="input-base"
+                  <Field label="Host">
+                    <CustomSelect
+                      searchable
+                      value={form.hostId}
+                      onChange={(val) => setForm((current) => {
+                        return { ...current, hostId: val };
+                      })}
+                      placeholder="Select a host"
+                      options={[
+                        { value: "", label: "Select a host" },
+                        ...employees
+                          .filter((e) => e.status === "active")
+                          .map((e) => ({ value: e.id, label: `${e.firstName} ${e.lastName}` }))
+                      ]}
                     />
                   </Field>
-                )}
-
-                <ChecklistGroup
-                  title="Departments"
-                  items={departments.map((department) => ({ id: department.id, label: department.name }))}
-                  selectedItems={form.departmentIds}
-                  onToggle={handleDepartmentToggle}
-                />
-
-                <div>
-                  <p className="mb-2 text-sm font-semibold text-slate-700">Internal attendees</p>
-                  <div className="relative mb-2">
-                    <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <input
-                      type="text"
-                      placeholder="Search employees..."
-                      value={form.attendeeSearch || ""}
-                      onChange={(e) => setForm(prev => ({ ...prev, attendeeSearch: e.target.value }))}
-                      className="w-full pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-1 focus:ring-[#2B3990]/30"
-                    />
-                  </div>
-                  <div className="max-h-44 space-y-3 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50/60 p-3">
-                    {departments.map(dept => {
-                      const deptEmployees = groupedEmployees[dept.id] || [];
-                      const searchTerm = (form.attendeeSearch || "").toLowerCase();
-                      const filteredDeptEmployees = deptEmployees.filter(emp => 
-                        `${emp.firstName} ${emp.lastName} · ${emp.designation || emp.role}`.toLowerCase().includes(searchTerm)
-                      );
-                      if (filteredDeptEmployees.length === 0) return null;
-                      
-                      return (
-                        <div key={dept.id} className="space-y-1">
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pl-1">{dept.name}</p>
-                          {filteredDeptEmployees.map(emp => {
-                            const checked = form.internalAttendeeIds.includes(emp.id);
-                            return (
-                              <button
-                                key={emp.id}
-                                type="button"
-                                onClick={() => toggleArrayValue("internalAttendeeIds", emp.id)}
-                                className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm transition-colors ${
-                                  checked
-                                    ? "bg-[#2B3990]/8 text-[#2B3990]"
-                                    : "text-slate-700 hover:bg-white"
-                                }`}
-                              >
-                                <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-all ${
-                                  checked
-                                    ? "border-[#2B3990] bg-[#2B3990]"
-                                    : "border-slate-300 bg-white"
-                                }`}>
-                                  {checked && (
-                                    <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
-                                      <path d="M1 3L3.5 5.5L8 1" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-                                    </svg>
-                                  )}
-                                </span>
-                                <span className="leading-snug">{emp.firstName} {emp.lastName} · {emp.designation || emp.role}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      );
-                    })}
-                    {/* Show employees without department (if any) */}
-                    {(() => {
-                      const searchTerm = (form.attendeeSearch || "").toLowerCase();
-                      const employeesWithoutDept = employees.filter(
-                        e => e.status === "active" && !e.departmentId && 
-                        `${e.firstName} ${e.lastName} · ${e.designation || e.role}`.toLowerCase().includes(searchTerm)
-                      );
-                      if (employeesWithoutDept.length === 0) return null;
-                      
-                      return (
-                        <div key="no-dept" className="space-y-1">
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pl-1">Other</p>
-                          {employeesWithoutDept.map(emp => {
-                            const checked = form.internalAttendeeIds.includes(emp.id);
-                            return (
-                              <button
-                                key={emp.id}
-                                type="button"
-                                onClick={() => toggleArrayValue("internalAttendeeIds", emp.id)}
-                                className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm transition-colors ${
-                                  checked
-                                    ? "bg-[#2B3990]/8 text-[#2B3990]"
-                                    : "text-slate-700 hover:bg-white"
-                                }`}
-                              >
-                                <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-all ${
-                                  checked
-                                    ? "border-[#2B3990] bg-[#2B3990]"
-                                    : "border-slate-300 bg-white"
-                                }`}>
-                                  {checked && (
-                                    <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
-                                      <path d="M1 3L3.5 5.5L8 1" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-                                    </svg>
-                                  )}
-                                </span>
-                                <span className="leading-snug">{emp.firstName} {emp.lastName} · {emp.designation || emp.role}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      );
-                    })()}
-                  </div>
                 </div>
+
+                <div className="grid gap-3 lg:grid-cols-2">
+                  <Field label="Location Preference">
+                    <div className="flex gap-3">
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="locationType"
+                          checked={form.isVirtual}
+                          onChange={() => setForm(prev => ({ ...prev, isVirtual: true, location: "" }))}
+                          className="h-3.5 w-3.5 text-[#2B3990] border-slate-300 focus:ring-[#2B3990]"
+                        />
+                        <span className="text-sm font-medium text-slate-700">Online (Zoom)</span>
+                      </label>
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="locationType"
+                          checked={!form.isVirtual}
+                          onChange={() => setForm(prev => ({ ...prev, isVirtual: false }))}
+                          className="h-3.5 w-3.5 text-[#2B3990] border-slate-300 focus:ring-[#2B3990]"
+                        />
+                        <span className="text-sm font-medium text-slate-700">In Person + Zoom</span>
+                      </label>
+                    </div>
+                  </Field>
+
+                  {!form.isVirtual && (
+                    <Field label="Physical Location">
+                      <input
+                        required
+                        value={form.location}
+                        onChange={(event) => setForm((current) => ({ ...current, location: event.target.value }))}
+                        placeholder="e.g., Conference Room A, Floor 2"
+                        className="input-base"
+                      />
+                    </Field>
+                  )}
+                </div>
+
+               <div className="grid gap-3 lg:grid-cols-2">
+  <ChecklistGroup
+    className="h-44"
+    title="Departments"
+    items={departments.map((department) => ({ id: department.id, label: department.name }))}
+    selectedItems={form.departmentIds}
+    onToggle={handleDepartmentToggle}
+  />
+
+  <div className="flex h-44 flex-col">
+    <p className="mb-1 text-xs font-semibold text-slate-700">Internal attendees</p>
+    <div className="relative mb-1.5">
+      <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
+      <input
+        type="text"
+        placeholder="Search employees..."
+        value={form.attendeeSearch || ""}
+        onChange={(e) => setForm(prev => ({ ...prev, attendeeSearch: e.target.value }))}
+        className="w-full pl-7 pr-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-[#2B3990]/30"
+      />
+    </div>
+    <div className="flex-1 min-h-0 space-y-1.5 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50/60 p-1.5">
+      {departments.map(dept => {
+        const deptEmployees = groupedEmployees[dept.id] || [];
+        const searchTerm = (form.attendeeSearch || "").toLowerCase();
+        const filteredDeptEmployees = deptEmployees.filter(emp => 
+          `${emp.firstName} ${emp.lastName} · ${emp.designation || emp.role}`.toLowerCase().includes(searchTerm)
+        );
+        if (filteredDeptEmployees.length === 0) return null;
+        
+        return (
+          <div key={dept.id} className="space-y-0.5">
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider pl-1">{dept.name}</p>
+            {filteredDeptEmployees.map(emp => {
+              const checked = form.internalAttendeeIds.includes(emp.id);
+              return (
+                <button
+                  key={emp.id}
+                  type="button"
+                  onClick={() => toggleArrayValue("internalAttendeeIds", emp.id)}
+                  className={`flex w-full items-center gap-2 rounded-md px-1.5 py-0.5 text-left text-xs transition-colors ${
+                    checked
+                      ? "bg-[#2B3990]/8 text-[#2B3990]"
+                      : "text-slate-700 hover:bg-white"
+                  }`}
+                >
+                  <span className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border transition-all ${
+                    checked
+                      ? "border-[#2B3990] bg-[#2B3990]"
+                      : "border-slate-300 bg-white"
+                  }`}>
+                    {checked && (
+                      <svg width="8" height="6" viewBox="0 0 9 7" fill="none">
+                        <path d="M1 3L3.5 5.5L8 1" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    )}
+                  </span>
+                  <span className="leading-snug">{emp.firstName} {emp.lastName} · {emp.designation || emp.role}</span>
+                </button>
+              );
+            })}
+          </div>
+        );
+      })}
+      {/* Show employees without department (if any) */}
+      {(() => {
+        const searchTerm = (form.attendeeSearch || "").toLowerCase();
+        const employeesWithoutDept = employees.filter(
+          e => e.status === "active" && !e.departmentId && 
+          `${e.firstName} ${e.lastName} · ${e.designation || e.role}`.toLowerCase().includes(searchTerm)
+        );
+        if (employeesWithoutDept.length === 0) return null;
+        
+        return (
+          <div key="no-dept" className="space-y-0.5">
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider pl-1">Other</p>
+            {employeesWithoutDept.map(emp => {
+              const checked = form.internalAttendeeIds.includes(emp.id);
+              return (
+                <button
+                  key={emp.id}
+                  type="button"
+                  onClick={() => toggleArrayValue("internalAttendeeIds", emp.id)}
+                  className={`flex w-full items-center gap-2 rounded-md px-1.5 py-0.5 text-left text-xs transition-colors ${
+                    checked
+                      ? "bg-[#2B3990]/8 text-[#2B3990]"
+                      : "text-slate-700 hover:bg-white"
+                  }`}
+                >
+                  <span className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border transition-all ${
+                    checked
+                      ? "border-[#2B3990] bg-[#2B3990]"
+                      : "border-slate-300 bg-white"
+                  }`}>
+                    {checked && (
+                      <svg width="8" height="6" viewBox="0 0 9 7" fill="none">
+                        <path d="M1 3L3.5 5.5L8 1" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    )}
+                  </span>
+                  <span className="leading-snug">{emp.firstName} {emp.lastName} · {emp.designation || emp.role}</span>
+                </button>
+              );
+            })}
+          </div>
+        );
+      })()}
+    </div>
+  </div>
+</div>
 
                 <Field label="External attendees">
                   <textarea
-                    rows={3}
+                    rows={2}
                     value={form.externalAttendeesText}
                     onChange={(event) => setForm((current) => ({ ...current, externalAttendeesText: event.target.value }))}
                     placeholder="One attendee per line: Name, email@example.com, invited"
@@ -858,19 +957,19 @@ export default function MeetingsPage() {
               </div>
 
               {/* Fixed footer */}
-              <div className="flex justify-end gap-3 px-6 py-4 border-t border-slate-100 shrink-0">
+              <div className="flex justify-end gap-2.5 px-4 py-2.5 border-t border-slate-100 shrink-0">
                 <button
                   type="button"
                   onClick={resetForm}
                   disabled={isSubmitting}
-                  className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+                  className="rounded-lg border border-slate-200 bg-white px-3.5 py-1.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="rounded-xl bg-[#2B3990] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#232f77] disabled:cursor-not-allowed disabled:opacity-60"
+                  className="rounded-lg bg-[#2B3990] px-3.5 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#232f77] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {isSubmitting ? "Saving..." : editingId ? "Update meeting" : "Create meeting"}
                 </button>
@@ -1233,16 +1332,16 @@ function WeeklyBreakdown({ meetings, employeeMap, departmentMap }) {
   );
 }
 
-function Field({ label, children }) {
+function Field({ label, children, className = "" }) {
   return (
-    <label className="block">
-      <span className="mb-1.5 block text-sm font-semibold text-slate-700">{label}</span>
+    <label className={`block ${className}`}>
+      <span className="mb-1 block text-xs font-semibold text-slate-700">{label}</span>
       {children}
     </label>
   );
 }
 
-function ChecklistGroup({ title, items, selectedItems, onToggle, searchable = false }) {
+function ChecklistGroup({ title, items, selectedItems, onToggle, searchable = false, className = "" }) {
   const [searchQuery, setSearchQuery] = useState("");
 
   const filteredItems = useMemo(() => {
@@ -1253,21 +1352,21 @@ function ChecklistGroup({ title, items, selectedItems, onToggle, searchable = fa
   }, [items, searchable, searchQuery]);
 
   return (
-    <div>
-      <p className="mb-2 text-sm font-semibold text-slate-700">{title}</p>
+    <div className={`flex flex-col ${className}`}>
+      <p className="mb-1 text-xs font-semibold text-slate-700">{title}</p>
       {searchable && (
-        <div className="mb-2 relative">
-          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+        <div className="mb-1.5 relative">
+          <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
             placeholder="Search..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-1 focus:ring-[#2B3990]/30"
+            className="w-full pl-7 pr-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-[#2B3990]/30"
           />
         </div>
       )}
-      <div className="max-h-44 space-y-1 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50/60 p-2">
+      <div className="flex-1 min-h-0 space-y-0.5 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50/60 p-1.5">
         {filteredItems.length === 0 && (
           <p className="py-2 text-center text-xs text-slate-400 italic">No items found.</p>
         )}
@@ -1278,20 +1377,19 @@ function ChecklistGroup({ title, items, selectedItems, onToggle, searchable = fa
               key={item.id}
               type="button"
               onClick={() => onToggle(item.id)}
-              className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm transition-colors ${
+              className={`flex w-full items-center gap-2 rounded-md px-1.5 py-0.5 text-left text-xs transition-colors ${
                 checked
                   ? "bg-[#2B3990]/8 text-[#2B3990]"
                   : "text-slate-700 hover:bg-white"
               }`}
             >
-              {/* Custom checkbox box */}
-              <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-all ${
+              <span className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border transition-all ${
                 checked
                   ? "border-[#2B3990] bg-[#2B3990]"
                   : "border-slate-300 bg-white"
               }`}>
                 {checked && (
-                  <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
+                  <svg width="8" height="6" viewBox="0 0 9 7" fill="none">
                     <path d="M1 3L3.5 5.5L8 1" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 )}

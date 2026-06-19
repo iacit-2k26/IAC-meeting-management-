@@ -261,7 +261,7 @@ export default function DateTimePicker({ value, onChange, placeholder = "Select 
         top: popoverCoords.top !== undefined ? `${popoverCoords.top}px` : undefined,
         bottom: popoverCoords.bottom !== undefined ? `${popoverCoords.bottom}px` : undefined,
         left: `${popoverCoords.left}px`,
-        width: `${popoverCoords.width}px`,
+        width: `${Math.min(popoverCoords.width, 320)}px`,
       }}
     >
       <div className="flex flex-col gap-3">

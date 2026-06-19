@@ -633,6 +633,14 @@ export async function updateMeeting(meetingId, payload) {
 
 export async function deleteMeeting(meetingId) {
   const collection = await getCollection("meetings");
+  
+  // Check if it's a Google Calendar-only meeting (id starts with gcal-)
+  if (meetingId.startsWith("gcal-")) {
+    const googleEventId = meetingId.slice(5); // remove "gcal-" prefix
+    await deleteCalendarEvent(googleEventId);
+    return;
+  }
+
   const meeting = await collection.findOne({ id: meetingId });
 
   if (!meeting) {
