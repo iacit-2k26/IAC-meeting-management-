@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Calendar, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock, HelpCircle, Mail, Pencil, Plus, RefreshCw, Search, Trash2, User, UsersRound, X, XCircle } from "lucide-react";
+import { Calendar, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock, HelpCircle, Loader2, Mail, Pencil, Plus, RefreshCw, Search, Trash2, User, Users, UsersRound, X, XCircle } from "lucide-react";
 import CustomSelect from "@/components/ui/CustomSelect";
 import DateTimePicker from "@/components/ui/DateTimePicker";
 import DatePicker from "@/components/ui/DatePicker";
@@ -193,11 +193,20 @@ function serializeExternalAttendees(attendees = []) {
     .join("\n");
 }
 
+const TIME_SLOT_INTERVAL = 30; // minutes
+const WORK_START_HOUR = 9;
+const WORK_END_HOUR = 18;
+
 export default function MeetingsPage() {
   const [meetings, setMeetings] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [query, setQuery] = useState("");
+  
+  // Availability state
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [loadingAvailability, setLoadingAvailability] = useState(false);
+  const [availabilityData, setAvailabilityData] = useState(null);
   const [dateRange, setDateRange] = useState({
     start: new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split("T")[0],
     end: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString().split("T")[0],
@@ -393,6 +402,126 @@ export default function MeetingsPage() {
     }
   };
 
+  // Availability helpers
+  const formatTime = (dateStr) => {
+    const date = new Date(dateStr);
+    return date.toLocaleTimeString("en-IN", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const generateTimeSlots = () => {
+    const slots = [];
+    for (let hour = WORK_START_HOUR; hour < WORK_END_HOUR; hour++) {
+      for (let minute = 0; minute < 60; minute += TIME_SLOT_INTERVAL) {
+        slots.push({ hour, minute });
+      }
+    }
+    return slots;
+  };
+
+  const getCommonFreeSlots = () => {
+    if (!availabilityData || !availabilityData.freeBusy?.calendars) {
+      return [];
+    }
+
+    const timeSlots = generateTimeSlots();
+    const busyIntervalsByEmployee = {};
+
+    Object.keys(availabilityData.freeBusy.calendars).forEach((email) => {
+      const calendar = availabilityData.freeBusy.calendars[email];
+      busyIntervalsByEmployee[email] = (calendar.busy || []).map((slot) => ({
+        start: new Date(slot.start),
+        end: new Date(slot.end),
+      }));
+    });
+
+    const freeSlots = [];
+    const date = new Date(availabilityDate);
+
+    timeSlots.forEach((slot) => {
+      const slotStart = new Date(date);
+      slotStart.setHours(slot.hour, slot.minute, 0, 0);
+      const slotEnd = new Date(slotStart);
+      slotEnd.setMinutes(slotEnd.getMinutes() + TIME_SLOT_INTERVAL);
+
+      const isFreeForAll = selectedEmployeesForAvailability.every((emp) => {
+        const busyIntervals = busyIntervalsByEmployee[emp.email] || [];
+        return !busyIntervals.some((busy) => {
+          return !(slotEnd <= busy.start || slotStart >= busy.end);
+        });
+      });
+
+      if (isFreeForAll) {
+        freeSlots.push({
+          start: slotStart,
+          end: slotEnd,
+        });
+      }
+    });
+
+    const mergedFreeSlots = [];
+    freeSlots.forEach((slot) => {
+      if (mergedFreeSlots.length === 0) {
+        mergedFreeSlots.push({ ...slot });
+      } else {
+        const last = mergedFreeSlots[mergedFreeSlots.length - 1];
+        if (last.end.getTime() === slot.start.getTime()) {
+          last.end = slot.end;
+        } else {
+          mergedFreeSlots.push({ ...slot });
+        }
+      }
+    });
+
+    return mergedFreeSlots;
+  };
+
+  // Get selected employees from form for availability
+  const selectedEmployeesForAvailability = useMemo(() => {
+    return employees.filter(emp => form.internalAttendeeIds.includes(emp.id));
+  }, [form.internalAttendeeIds, employees]);
+
+  // Extract selected date for availability from form schedule
+  const availabilityDate = useMemo(() => {
+    if (form.scheduleDateTime) {
+      return form.scheduleDateTime.split('T')[0];
+    }
+    return selectedDate;
+  }, [form.scheduleDateTime, selectedDate]);
+
+  const commonFreeSlots = getCommonFreeSlots();
+
+  // Fetch availability data
+  useEffect(() => {
+    const fetchAvailability = async () => {
+      if (!availabilityDate || selectedEmployeesForAvailability.length === 0) {
+        setAvailabilityData(null);
+        return;
+      }
+
+      setLoadingAvailability(true);
+      try {
+        const res = await fetch("/api/availability", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            employeeEmails: selectedEmployeesForAvailability.map((emp) => emp.email),
+            date: availabilityDate,
+          }),
+        });
+        const data = await res.json();
+        setAvailabilityData(data);
+      } catch (error) {
+        console.error("Failed to fetch availability:", error);
+      } finally {
+        setLoadingAvailability(false);
+      }
+    };
+    fetchAvailability();
+  }, [availabilityDate, selectedEmployeesForAvailability]);
+
   const toggleArrayValue = (field, value) => {
     setForm((current) => ({
       ...current,
@@ -442,56 +571,56 @@ export default function MeetingsPage() {
     <>
       {isLoading && <TruckLoader />}
       <div className={`${isLoading ? "hidden" : "block"} space-y-6`}>
-      <section className="-ml-5 p-5 sm:p-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#2B3990]">
-              Modules 3 & 4
-            </p>
-            <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-slate-900">
-              Meeting Central & Dashboard
-            </h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-              Create, update, track, and review meetings with internal and external attendees.
-            </p>
-            <div className="mt-3 inline-flex items-center gap-2 rounded-xl border border-[#2B3990]/50 bg-blue-50 px-3 py-1.5">
-              <CalendarDays size={14} className="text-[#2B3990]" />
-              <span className="text-sm font-semibold text-[#2B3990]">
-                {filteredMeetings.filter((m) => {
-                  const today = new Date().toLocaleDateString("en-CA");
-                  return new Date(m.scheduleDateTime).toLocaleDateString("en-CA") === today && m.status === "upcoming";
-                }).length} upcoming today
-              </span>
+        <section className="-ml-5 p-5 sm:p-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#2B3990]">
+                Modules 3 & 4
+              </p>
+              <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-slate-900">
+                Meeting Central & Dashboard
+              </h1>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+                Create, update, track, and review meetings with internal and external attendees.
+              </p>
+              <div className="mt-3 inline-flex items-center gap-2 rounded-xl border border-[#2B3990]/50 bg-blue-50 px-3 py-1.5">
+                <CalendarDays size={14} className="text-[#2B3990]" />
+                <span className="text-sm font-semibold text-[#2B3990]">
+                  {filteredMeetings.filter((m) => {
+                    const today = new Date().toLocaleDateString("en-CA");
+                    return new Date(m.scheduleDateTime).toLocaleDateString("en-CA") === today && m.status === "upcoming";
+                  }).length} upcoming today
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => loadData(false)}
+                disabled={isLoading || isRefreshing}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50"
+              >
+                <RefreshCw size={16} className={isRefreshing ? "animate-spin" : ""} />
+                Refresh
+              </button>
+              <button
+                type="button"
+                onClick={startCreate}
+                className="inline-flex items-center gap-2 rounded-xl bg-[#2B3990] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#232f77]"
+              >
+                <Plus size={16} />
+                New meeting
+              </button>
             </div>
           </div>
+        </section>
 
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => loadData(false)}
-              disabled={isLoading || isRefreshing}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50"
-            >
-              <RefreshCw size={16} className={isRefreshing ? "animate-spin" : ""} />
-              Refresh
-            </button>
-            <button
-              type="button"
-              onClick={startCreate}
-              className="inline-flex items-center gap-2 rounded-xl bg-[#2B3990] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#232f77]"
-            >
-              <Plus size={16} />
-              New meeting
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <section className="panel-surface p-5">
+        <section className="panel-surface p-5">
           <WeeklyBreakdown meetings={meetings} employeeMap={employeeMap} departmentMap={departmentMap} />
-      </section>
+        </section>
 
-      <section className="panel-surface p-5">
+        <section className="panel-surface p-5">
           <div className="mb-6 space-y-3">
             {/* Row 1 — title + search */}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -675,7 +804,7 @@ export default function MeetingsPage() {
             className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
             onClick={resetForm}
           />
-          <div className="relative w-full max-w-5xl max-h-[85vh] flex flex-col">
+          <div className="relative w-full max-w-7xl max-h-[90vh] flex flex-col">
             <form onSubmit={submitForm} className="relative rounded-2xl border border-slate-200 bg-white shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
               {/* Fixed header */}
               <div className="flex items-center justify-between px-4 pt-3 pb-2.5 border-b border-slate-100 shrink-0">
@@ -694,89 +823,92 @@ export default function MeetingsPage() {
                 </button>
               </div>
 
-              {/* Scrollable body */}
-              <div className="overflow-y-auto px-4 py-3 space-y-2.5 flex-1 min-h-0">
-                {feedback.message && (
-                  <div
-                    className={`rounded-xl border px-3 py-2 text-sm ${
-                      feedback.type === "error"
-                        ? "border-red-200 bg-red-50 text-red-700"
-                        : "border-emerald-200 bg-emerald-50 text-emerald-700"
-                    }`}
-                  >
-                    {feedback.message}
-                  </div>
-                )}
+              {/* Split body */}
+              <div className="flex flex-1 min-h-0">
+                {/* Left: Form */}
+                <div className="w-1/2 overflow-y-auto px-4 py-3 space-y-2.5 border-r border-slate-200">
+                  {feedback.message && (
+                    <div
+                      className={`rounded-xl border px-3 py-2 text-sm ${
+                        feedback.type === "error"
+                          ? "border-red-200 bg-red-50 text-red-700"
+                          : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      }`}
+                    >
+                      {feedback.message}
+                    </div>
+                  )}
 
-                {/* Template Selection */}
-                <div>
-                  <p className="mb-1.5 text-xs font-semibold text-slate-700">Use a template (optional)</p>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-1.5">
-                    {MEETING_TEMPLATES.map((template, index) => (
-                      <button
-                        key={index}
-                        type="button"
-                        onClick={() => setForm(prev => ({
-                          ...prev,
-                          ...template.data
-                        }))}
-                        className="px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 hover:border-slate-300 transition-colors"
-                      >
-                        {template.name}
-                      </button>
-                    ))}
+                  {/* Template Selection */}
+                  <div>
+                    <p className="mb-1.5 text-xs font-semibold text-slate-700">Use a template (optional)</p>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {MEETING_TEMPLATES.map((template, index) => (
+                        <button
+                          key={index}
+                          type="button"
+                          onClick={() => setForm(prev => ({
+                            ...prev,
+                            ...template.data
+                          }))}
+                          className="px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 hover:border-slate-300 transition-colors"
+                        >
+                          {template.name}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
 
-                <div className="grid gap-3 lg:grid-cols-3">
-                  <Field label="Meeting title" className="lg:col-span-2">
-                    <input
+                  <div className="grid gap-3 lg:grid-cols-3">
+                    <Field label="Meeting title" className="lg:col-span-2">
+                      <input
+                        required
+                        value={form.title}
+                        onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
+                        className="input-base"
+                      />
+                    </Field>
+                    <Field label="Meeting type (optional)">
+                      <CustomSelect
+                        value={form.meetingType}
+                        onChange={(val) => setForm((current) => ({ ...current, meetingType: val }))}
+                        placeholder="— None —"
+                        options={[
+                          { value: "", label: "— None —" },
+                          ...MEETING_TYPES.map((t) => ({ value: t, label: t })),
+                        ]}
+                      />
+                    </Field>
+                  </div>
+                  <Field label="Agenda">
+                    <textarea
                       required
-                      value={form.title}
-                      onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
+                      rows={2}
+                      value={form.agenda}
+                      onChange={(event) => setForm((current) => ({ ...current, agenda: event.target.value }))}
+                      placeholder="Provide a brief description or agenda for the meeting."
                       className="input-base"
                     />
                   </Field>
-                  <Field label="Meeting type (optional)">
-                    <CustomSelect
-                      value={form.meetingType}
-                      onChange={(val) => setForm((current) => ({ ...current, meetingType: val }))}
-                      placeholder="— None —"
-                      options={[
-                        { value: "", label: "— None —" },
-                        ...MEETING_TYPES.map((t) => ({ value: t, label: t })),
-                      ]}
-                    />
-                  </Field>
-                </div>
-                <Field label="Agenda">
-                  <textarea
-                    required
-                    rows={2}
-                    value={form.agenda}
-                    onChange={(event) => setForm((current) => ({ ...current, agenda: event.target.value }))}
-                    placeholder="Provide a brief description or agenda for the meeting."
-                    className="input-base"
-                  />
-                </Field>
-                <div className="grid gap-3 lg:grid-cols-4">
-                  <Field label="Schedule" className="lg:col-span-2">
-                    <DateTimePicker
-                      value={form.scheduleDateTime}
-                      onChange={(e) => setForm((current) => ({ ...current, scheduleDateTime: e.target.value }))}
-                      placeholder="Select date and time"
-                    />
-                  </Field>
-                  <Field label="Duration (minutes)">
-                    <input
-                      required
-                      min="15"
-                      type="number"
-                      value={form.duration}
-                      onChange={(event) => setForm((current) => ({ ...current, duration: event.target.value }))}
-                      className="input-base"
-                    />
-                  </Field>
+                  <div className="grid gap-3 lg:grid-cols-2">
+                    <Field label="Schedule">
+                      <DateTimePicker
+                        value={form.scheduleDateTime}
+                        onChange={(e) => setForm((current) => ({ ...current, scheduleDateTime: e.target.value }))}
+                        placeholder="Select date and time"
+                      />
+                    </Field>
+                    <Field label="Duration (minutes)">
+                      <input
+                        required
+                        min="15"
+                        type="number"
+                        value={form.duration}
+                        onChange={(event) => setForm((current) => ({ ...current, duration: event.target.value }))}
+                        className="input-base"
+                      />
+                    </Field>
+                  </div>
                   <Field label="Host">
                     <CustomSelect
                       searchable
@@ -793,167 +925,281 @@ export default function MeetingsPage() {
                       ]}
                     />
                   </Field>
-                </div>
 
-                <div className="grid gap-3 lg:grid-cols-2">
-                  <Field label="Location Preference">
-                    <div className="flex gap-3">
-                      <label className="flex items-center gap-1.5 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="locationType"
-                          checked={form.isVirtual}
-                          onChange={() => setForm(prev => ({ ...prev, isVirtual: true, location: "" }))}
-                          className="h-3.5 w-3.5 text-[#2B3990] border-slate-300 focus:ring-[#2B3990]"
-                        />
-                        <span className="text-sm font-medium text-slate-700">Online (Zoom)</span>
-                      </label>
-                      <label className="flex items-center gap-1.5 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="locationType"
-                          checked={!form.isVirtual}
-                          onChange={() => setForm(prev => ({ ...prev, isVirtual: false }))}
-                          className="h-3.5 w-3.5 text-[#2B3990] border-slate-300 focus:ring-[#2B3990]"
-                        />
-                        <span className="text-sm font-medium text-slate-700">In Person + Zoom</span>
-                      </label>
-                    </div>
-                  </Field>
-
-                  {!form.isVirtual && (
-                    <Field label="Physical Location">
-                      <input
-                        required
-                        value={form.location}
-                        onChange={(event) => setForm((current) => ({ ...current, location: event.target.value }))}
-                        placeholder="e.g., Conference Room A, Floor 2"
-                        className="input-base"
-                      />
+                  <div className="grid gap-3">
+                    <Field label="Location Preference">
+                      <div className="flex gap-3">
+                        <label className="flex items-center gap-1.5 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="locationType"
+                            checked={form.isVirtual}
+                            onChange={() => setForm(prev => ({ ...prev, isVirtual: true, location: "" }))}
+                            className="h-3.5 w-3.5 text-[#2B3990] border-slate-300 focus:ring-[#2B3990]"
+                          />
+                          <span className="text-sm font-medium text-slate-700">Online (Zoom)</span>
+                        </label>
+                        <label className="flex items-center gap-1.5 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="locationType"
+                            checked={!form.isVirtual}
+                            onChange={() => setForm(prev => ({ ...prev, isVirtual: false }))}
+                            className="h-3.5 w-3.5 text-[#2B3990] border-slate-300 focus:ring-[#2B3990]"
+                          />
+                          <span className="text-sm font-medium text-slate-700">In Person + Zoom</span>
+                        </label>
+                      </div>
                     </Field>
-                  )}
+
+                    {!form.isVirtual && (
+                      <Field label="Physical Location">
+                        <input
+                          required
+                          value={form.location}
+                          onChange={(event) => setForm((current) => ({ ...current, location: event.target.value }))}
+                          placeholder="e.g., Conference Room A, Floor 2"
+                          className="input-base"
+                        />
+                      </Field>
+                    )}
+                  </div>
+
+                  <ChecklistGroup
+                    className="h-60"
+                    title="Departments"
+                    items={departments.map((department) => ({ id: department.id, label: department.name }))}
+                    selectedItems={form.departmentIds}
+                    onToggle={handleDepartmentToggle}
+                  />
+
+                  <div className="flex h-60 flex-col">
+                    <p className="mb-1 text-xs font-semibold text-slate-700">Internal attendees</p>
+                    <div className="relative mb-1.5">
+                      <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Search employees..."
+                        value={form.attendeeSearch || ""}
+                        onChange={(e) => setForm(prev => ({ ...prev, attendeeSearch: e.target.value }))}
+                        className="w-full pl-7 pr-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-[#2B3990]/30"
+                      />
+                    </div>
+                    <div className="flex-1 min-h-0 space-y-1.5 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50/60 p-1.5">
+                      {departments.map(dept => {
+                        const deptEmployees = groupedEmployees[dept.id] || [];
+                        const searchTerm = (form.attendeeSearch || "").toLowerCase();
+                        const filteredDeptEmployees = deptEmployees.filter(emp => 
+                          `${emp.firstName} ${emp.lastName} · ${emp.designation || emp.role}`.toLowerCase().includes(searchTerm)
+                        );
+                        if (filteredDeptEmployees.length === 0) return null;
+                        
+                        return (
+                          <div key={dept.id} className="space-y-0.5">
+                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider pl-1">{dept.name}</p>
+                            {filteredDeptEmployees.map(emp => {
+                              const checked = form.internalAttendeeIds.includes(emp.id);
+                              return (
+                                <button
+                                  key={emp.id}
+                                  type="button"
+                                  onClick={() => toggleArrayValue("internalAttendeeIds", emp.id)}
+                                  className={`flex w-full items-center gap-2 rounded-md px-1.5 py-0.5 text-left text-xs transition-colors ${
+                                    checked
+                                      ? "bg-[#2B3990]/8 text-[#2B3990]"
+                                      : "text-slate-700 hover:bg-white"
+                                  }`}
+                                >
+                                  <span className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border transition-all ${
+                                    checked
+                                      ? "border-[#2B3990] bg-[#2B3990]"
+                                      : "border-slate-300 bg-white"
+                                  }`}>
+                                    {checked && (
+                                      <svg width="8" height="6" viewBox="0 0 9 7" fill="none">
+                                        <path d="M1 3L3.5 5.5L8 1" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                                      </svg>
+                                    )}
+                                  </span>
+                                  <span className="leading-snug">{emp.firstName} {emp.lastName} · {emp.designation || emp.role}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        );
+                      })}
+                      {/* Show employees without department (if any) */}
+                      {(() => {
+                        const searchTerm = (form.attendeeSearch || "").toLowerCase();
+                        const employeesWithoutDept = employees.filter(
+                          e => e.status === "active" && !e.departmentId && 
+                          `${e.firstName} ${e.lastName} · ${e.designation || e.role}`.toLowerCase().includes(searchTerm)
+                        );
+                        if (employeesWithoutDept.length === 0) return null;
+                        
+                        return (
+                          <div key="no-dept" className="space-y-0.5">
+                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider pl-1">Other</p>
+                            {employeesWithoutDept.map(emp => {
+                              const checked = form.internalAttendeeIds.includes(emp.id);
+                              return (
+                                <button
+                                  key={emp.id}
+                                  type="button"
+                                  onClick={() => toggleArrayValue("internalAttendeeIds", emp.id)}
+                                  className={`flex w-full items-center gap-2 rounded-md px-1.5 py-0.5 text-left text-xs transition-colors ${
+                                    checked
+                                      ? "bg-[#2B3990]/8 text-[#2B3990]"
+                                      : "text-slate-700 hover:bg-white"
+                                  }`}
+                                >
+                                  <span className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border transition-all ${
+                                    checked
+                                      ? "border-[#2B3990] bg-[#2B3990]"
+                                      : "border-slate-300 bg-white"
+                                  }`}>
+                                    {checked && (
+                                      <svg width="8" height="6" viewBox="0 0 9 7" fill="none">
+                                        <path d="M1 3L3.5 5.5L8 1" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                                      </svg>
+                                    )}
+                                  </span>
+                                  <span className="leading-snug">{emp.firstName} {emp.lastName} · {emp.designation || emp.role}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
+
+                  <Field label="External attendees">
+                    <textarea
+                      rows={2}
+                      value={form.externalAttendeesText}
+                      onChange={(event) => setForm((current) => ({ ...current, externalAttendeesText: event.target.value }))}
+                      placeholder="One attendee per line: Name, email@example.com, invited"
+                      className="input-base"
+                    />
+                  </Field>
                 </div>
 
-               <div className="grid gap-3 lg:grid-cols-2">
-  <ChecklistGroup
-    className="h-44"
-    title="Departments"
-    items={departments.map((department) => ({ id: department.id, label: department.name }))}
-    selectedItems={form.departmentIds}
-    onToggle={handleDepartmentToggle}
-  />
+                {/* Right: Availability */}
+                <div className="w-1/2 overflow-y-auto px-4 py-3 bg-slate-50/30">
+                  <div className="space-y-4">
+                    <div>
+                      <p className="text-xs font-semibold text-slate-700 mb-2 flex items-center gap-1">
+                        <Calendar size={14} />
+                        Selected date for availability
+                      </p>
+                      <DatePicker
+                        value={availabilityDate}
+                        onChange={(val) => {
+                          if (form.scheduleDateTime) {
+                            const time = form.scheduleDateTime.split('T')[1];
+                            setForm(prev => ({ ...prev, scheduleDateTime: `${val}T${time || '09:00'}` }));
+                          } else {
+                            setSelectedDate(val);
+                          }
+                        }}
+                      />
+                    </div>
 
-  <div className="flex h-44 flex-col">
-    <p className="mb-1 text-xs font-semibold text-slate-700">Internal attendees</p>
-    <div className="relative mb-1.5">
-      <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
-      <input
-        type="text"
-        placeholder="Search employees..."
-        value={form.attendeeSearch || ""}
-        onChange={(e) => setForm(prev => ({ ...prev, attendeeSearch: e.target.value }))}
-        className="w-full pl-7 pr-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-[#2B3990]/30"
-      />
-    </div>
-    <div className="flex-1 min-h-0 space-y-1.5 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50/60 p-1.5">
-      {departments.map(dept => {
-        const deptEmployees = groupedEmployees[dept.id] || [];
-        const searchTerm = (form.attendeeSearch || "").toLowerCase();
-        const filteredDeptEmployees = deptEmployees.filter(emp => 
-          `${emp.firstName} ${emp.lastName} · ${emp.designation || emp.role}`.toLowerCase().includes(searchTerm)
-        );
-        if (filteredDeptEmployees.length === 0) return null;
-        
-        return (
-          <div key={dept.id} className="space-y-0.5">
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider pl-1">{dept.name}</p>
-            {filteredDeptEmployees.map(emp => {
-              const checked = form.internalAttendeeIds.includes(emp.id);
-              return (
-                <button
-                  key={emp.id}
-                  type="button"
-                  onClick={() => toggleArrayValue("internalAttendeeIds", emp.id)}
-                  className={`flex w-full items-center gap-2 rounded-md px-1.5 py-0.5 text-left text-xs transition-colors ${
-                    checked
-                      ? "bg-[#2B3990]/8 text-[#2B3990]"
-                      : "text-slate-700 hover:bg-white"
-                  }`}
-                >
-                  <span className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border transition-all ${
-                    checked
-                      ? "border-[#2B3990] bg-[#2B3990]"
-                      : "border-slate-300 bg-white"
-                  }`}>
-                    {checked && (
-                      <svg width="8" height="6" viewBox="0 0 9 7" fill="none">
-                        <path d="M1 3L3.5 5.5L8 1" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
+                    {selectedEmployeesForAvailability.length > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold text-slate-700 mb-2 flex items-center gap-1">
+                          <Users size={14} />
+                          Selected attendees ({selectedEmployeesForAvailability.length})
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {selectedEmployeesForAvailability.map(emp => (
+                            <span
+                              key={emp.id}
+                              className="px-2 py-1 bg-[#2B3990]/10 text-[#2B3990] text-xs rounded-full flex items-center gap-1"
+                            >
+                              {emp.firstName} {emp.lastName}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
                     )}
-                  </span>
-                  <span className="leading-snug">{emp.firstName} {emp.lastName} · {emp.designation || emp.role}</span>
-                </button>
-              );
-            })}
-          </div>
-        );
-      })}
-      {/* Show employees without department (if any) */}
-      {(() => {
-        const searchTerm = (form.attendeeSearch || "").toLowerCase();
-        const employeesWithoutDept = employees.filter(
-          e => e.status === "active" && !e.departmentId && 
-          `${e.firstName} ${e.lastName} · ${e.designation || e.role}`.toLowerCase().includes(searchTerm)
-        );
-        if (employeesWithoutDept.length === 0) return null;
-        
-        return (
-          <div key="no-dept" className="space-y-0.5">
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider pl-1">Other</p>
-            {employeesWithoutDept.map(emp => {
-              const checked = form.internalAttendeeIds.includes(emp.id);
-              return (
-                <button
-                  key={emp.id}
-                  type="button"
-                  onClick={() => toggleArrayValue("internalAttendeeIds", emp.id)}
-                  className={`flex w-full items-center gap-2 rounded-md px-1.5 py-0.5 text-left text-xs transition-colors ${
-                    checked
-                      ? "bg-[#2B3990]/8 text-[#2B3990]"
-                      : "text-slate-700 hover:bg-white"
-                  }`}
-                >
-                  <span className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border transition-all ${
-                    checked
-                      ? "border-[#2B3990] bg-[#2B3990]"
-                      : "border-slate-300 bg-white"
-                  }`}>
-                    {checked && (
-                      <svg width="8" height="6" viewBox="0 0 9 7" fill="none">
-                        <path d="M1 3L3.5 5.5L8 1" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    )}
-                  </span>
-                  <span className="leading-snug">{emp.firstName} {emp.lastName} · {emp.designation || emp.role}</span>
-                </button>
-              );
-            })}
-          </div>
-        );
-      })()}
-    </div>
-  </div>
-</div>
 
-                <Field label="External attendees">
-                  <textarea
-                    rows={2}
-                    value={form.externalAttendeesText}
-                    onChange={(event) => setForm((current) => ({ ...current, externalAttendeesText: event.target.value }))}
-                    placeholder="One attendee per line: Name, email@example.com, invited"
-                    className="input-base"
-                  />
-                </Field>
+                    <div className="flex-1">
+                      {loadingAvailability ? (
+                        <div className="flex flex-col items-center justify-center text-slate-400 gap-2 py-10">
+                          <Loader2 className="w-6 h-6 animate-spin" />
+                          <span className="text-sm">Loading availability...</span>
+                        </div>
+                      ) : !availabilityDate || selectedEmployeesForAvailability.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center text-slate-400 gap-3 py-10">
+                          <Clock className="w-10 h-10 opacity-30" />
+                          <p className="text-sm text-center">Select departments, attendees, and a date to view availability</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {/* Common Free Slots */}
+                          {commonFreeSlots.length > 0 && (
+                            <div>
+                              <h3 className="text-xs font-semibold text-slate-700 mb-2 flex items-center gap-1">
+                                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                                Common Free Slots
+                              </h3>
+                              <div className="space-y-2">
+                                {commonFreeSlots.map((slot, idx) => (
+                                  <div
+                                    key={idx}
+                                    className="bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 flex items-center justify-between"
+                                  >
+                                    <span className="text-sm font-medium text-emerald-800">
+                                      {formatTime(slot.start)} - {formatTime(slot.end)}
+                                    </span>
+                                    <span className="text-xs text-emerald-600">
+                                      {Math.round((slot.end - slot.start) / 60000)} minutes
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Scheduled Events */}
+                          <div>
+                            <h3 className="text-xs font-semibold text-slate-700 mb-2 flex items-center gap-1">
+                              <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+                              Scheduled Events
+                            </h3>
+                            {availabilityData?.calendarEvents?.length === 0 ? (
+                              <div className="text-slate-400 text-sm">No scheduled events</div>
+                            ) : (
+                              <div className="space-y-2">
+                                {availabilityData?.calendarEvents
+                                  ?.sort((a, b) => new Date(a.start?.dateTime || a.start?.date) - new Date(b.start?.dateTime || b.start?.date))
+                                  .map((event, idx) => {
+                                    const start = event.start?.dateTime || event.start?.date;
+                                    const end = event.end?.dateTime || event.end?.date;
+                                    return (
+                                      <div
+                                        key={idx}
+                                        className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2"
+                                      >
+                                        <div className="font-medium text-blue-800 text-sm mb-0.5">
+                                          {event.summary || "(No title)"}
+                                        </div>
+                                        <div className="text-xs text-blue-600">
+                                          {formatTime(start)} - {formatTime(end)}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Fixed footer */}
