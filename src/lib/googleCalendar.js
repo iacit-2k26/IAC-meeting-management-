@@ -34,6 +34,19 @@ function isGoogleCalendarConfigured() {
   );
 }
 
+// Helper function to parse datetime string as Asia/Kolkata time
+function parseAsIAST(dateTimeStr) {
+  // dateTimeStr format: YYYY-MM-DDTHH:MM
+  // We need to create a Date object that represents this exact time in Asia/Kolkata
+  
+  // Just create the date string with the correct timezone offset for IST (UTC+5:30)
+  // Format it as: YYYY-MM-DDTHH:MM:SS+05:30
+  const istDateTimeStr = `${dateTimeStr}:00+05:30`;
+  
+  // This will correctly parse the time as Asia/Kolkata
+  return new Date(istDateTimeStr);
+}
+
 // ---------------------------------------------------------------------------
 // Build a Google Calendar event resource from meeting data
 // ---------------------------------------------------------------------------
@@ -52,8 +65,24 @@ function buildCalendarEvent(meeting, attendees = []) {
 
   const eventTitle = _composedTitle || title;
 
-  const startTime = new Date(scheduleDateTime);
-  const endTime = new Date(startTime.getTime() + Number(duration) * 60 * 1000);
+  // For Google Calendar: When we provide timeZone, we should pass dateTime
+  // in the local time format (without Z), not UTC ISO
+  // Format: YYYY-MM-DDTHH:mm:ss
+  const startDateTimeLocal = `${scheduleDateTime}:00`;
+  
+  // Calculate end time by adding duration to start time directly
+  const [datePart, timePart] = scheduleDateTime.split('T');
+  const [hours, minutes] = timePart.split(':').map(Number);
+  const startDate = new Date(`${datePart}T${timePart}:00+05:30`);
+  const endDate = new Date(startDate.getTime() + Number(duration) * 60 * 1000);
+  
+  // Format end time in same local format for Google Calendar
+  const endYear = endDate.getFullYear();
+  const endMonth = String(endDate.getMonth() + 1).padStart(2, '0');
+  const endDay = String(endDate.getDate()).padStart(2, '0');
+  const endHours = String(endDate.getHours()).padStart(2, '0');
+  const endMins = String(endDate.getMinutes()).padStart(2, '0');
+  const endDateTimeLocal = `${endYear}-${endMonth}-${endDay}T${endHours}:${endMins}:00`;
 
   const description = [
     agenda ? `📋 Agenda:\n${agenda}` : "",
@@ -71,11 +100,11 @@ function buildCalendarEvent(meeting, attendees = []) {
     summary: eventTitle,
     description,
     start: {
-      dateTime: startTime.toISOString(),
+      dateTime: startDateTimeLocal,
       timeZone: "Asia/Kolkata",
     },
     end: {
-      dateTime: endTime.toISOString(),
+      dateTime: endDateTimeLocal,
       timeZone: "Asia/Kolkata",
     },
     attendees: attendees.map((a) => ({

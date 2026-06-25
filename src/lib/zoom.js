@@ -5,6 +5,19 @@ const ZOOM_ACCOUNT_ID = process.env.ZOOM_ACCOUNT_ID;
 let cachedToken = null;
 let tokenExpiry = 0;
 
+// Helper function to parse datetime string as Asia/Kolkata time
+function parseAsIAST(dateTimeStr) {
+  // dateTimeStr format: YYYY-MM-DDTHH:MM
+  // We need to create a Date object that represents this exact time in Asia/Kolkata
+  
+  // Just create the date string with the correct timezone offset for IST (UTC+5:30)
+  // Format it as: YYYY-MM-DDTHH:MM:SS+05:30
+  const istDateTimeStr = `${dateTimeStr}:00+05:30`;
+  
+  // This will correctly parse the time as Asia/Kolkata
+  return new Date(istDateTimeStr);
+}
+
 async function getZoomAccessToken() {
   if (cachedToken && Date.now() < tokenExpiry) {
     return cachedToken;
@@ -36,9 +49,8 @@ export async function createZoomMeeting({ topic, agenda, startTime, duration }) 
   try {
     const token = await getZoomAccessToken();
     
-    // Zoom API expects ISO 8601 format (e.g., 2022-03-25T07:32:55Z)
-    // If startTime doesn't have a timezone, we treat it as the server's local time
-    const startDateTime = new Date(startTime).toISOString();
+    // Parse startTime as Asia/Kolkata time and convert to ISO string
+    const startDateTime = parseAsIAST(startTime).toISOString();
     
     const response = await fetch("https://api.zoom.us/v2/users/me/meetings", {
       method: "POST",
@@ -52,6 +64,7 @@ export async function createZoomMeeting({ topic, agenda, startTime, duration }) 
         type: 2, // Scheduled meeting
         start_time: startDateTime,
         duration,
+        timezone: "Asia/Kolkata",
         settings: {
           host_video: true,
           participant_video: true,
@@ -117,8 +130,8 @@ export async function updateZoomMeeting(zoomMeetingId, { topic, agenda, startTim
   try {
     const token = await getZoomAccessToken();
     
-    // Zoom API expects ISO 8601 format (e.g., 2022-03-25T07:32:55Z)
-    const startDateTime = new Date(startTime).toISOString();
+    // Parse startTime as Asia/Kolkata time and convert to ISO string
+    const startDateTime = parseAsIAST(startTime).toISOString();
     
     const response = await fetch(`https://api.zoom.us/v2/meetings/${zoomMeetingId}`, {
       method: "PATCH",
@@ -131,6 +144,7 @@ export async function updateZoomMeeting(zoomMeetingId, { topic, agenda, startTim
         agenda: agenda || "",
         start_time: startDateTime,
         duration,
+        timezone: "Asia/Kolkata",
       }),
     });
 
