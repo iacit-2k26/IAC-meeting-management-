@@ -3,7 +3,7 @@
 export default function TruckLoader({ text = "Loading…", size = 0.50 }) {
   return (
     <div className="fixed inset-0 flex flex-col items-center justify-center z-[100] animate-in fade-in duration-700">
-      <style>{`
+      <style>{` 
       
         @keyframes iacBounce {
           0%, 100% { 
