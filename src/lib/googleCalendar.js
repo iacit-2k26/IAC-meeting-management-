@@ -71,18 +71,26 @@ function buildCalendarEvent(meeting, attendees = []) {
   const startDateTimeLocal = `${scheduleDateTime}:00`;
   
   // Calculate end time by adding duration to start time directly
-  const [datePart, timePart] = scheduleDateTime.split('T');
-  const [hours, minutes] = timePart.split(':').map(Number);
-  const startDate = new Date(`${datePart}T${timePart}:00+05:30`);
+  const startDate = new Date(`${scheduleDateTime}:00+05:30`);
   const endDate = new Date(startDate.getTime() + Number(duration) * 60 * 1000);
   
-  // Format end time in same local format for Google Calendar
-  const endYear = endDate.getFullYear();
-  const endMonth = String(endDate.getMonth() + 1).padStart(2, '0');
-  const endDay = String(endDate.getDate()).padStart(2, '0');
-  const endHours = String(endDate.getHours()).padStart(2, '0');
-  const endMins = String(endDate.getMinutes()).padStart(2, '0');
-  const endDateTimeLocal = `${endYear}-${endMonth}-${endDay}T${endHours}:${endMins}:00`;
+  // Format end time in same local format (Asia/Kolkata) using Intl.DateTimeFormat
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+  
+  const parts = formatter.formatToParts(endDate);
+  const partMap = Object.fromEntries(parts.map(p => [p.type, p.value]));
+  
+  // Format: YYYY-MM-DDTHH:mm:ss
+  const endDateTimeLocal = `${partMap.year}-${partMap.month}-${partMap.day}T${partMap.hour}:${partMap.minute}:00`;
 
   const description = [
     agenda ? `📋 Agenda:\n${agenda}` : "",
