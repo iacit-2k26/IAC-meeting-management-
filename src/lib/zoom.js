@@ -5,15 +5,20 @@ const ZOOM_ACCOUNT_ID = process.env.ZOOM_ACCOUNT_ID;
 let cachedToken = null;
 let tokenExpiry = 0;
 
+// Check if Zoom is configured
+function isZoomConfigured() {
+  return ZOOM_CLIENT_ID && ZOOM_CLIENT_SECRET && ZOOM_ACCOUNT_ID;
+}
+
 // Helper function to parse datetime string as Asia/Kolkata time
 function parseAsIAST(dateTimeStr) {
   // dateTimeStr format: YYYY-MM-DDTHH:MM
   // We need to create a Date object that represents this exact time in Asia/Kolkata
-  
+
   // Just create the date string with the correct timezone offset for IST (UTC+5:30)
   // Format it as: YYYY-MM-DDTHH:MM:SS+05:30
   const istDateTimeStr = `${dateTimeStr}:00+05:30`;
-  
+
   // This will correctly parse the time as Asia/Kolkata
   return new Date(istDateTimeStr);
 }
@@ -46,6 +51,11 @@ async function getZoomAccessToken() {
 }
 
 export async function createZoomMeeting({ topic, agenda, startTime, duration }) {
+  if (!isZoomConfigured()) {
+    console.warn("[Zoom] Credentials not configured. Skipping Zoom meeting creation.");
+    return { id: "", joinUrl: "", password: "" };
+  }
+  
   try {
     const token = await getZoomAccessToken();
     
@@ -88,7 +98,9 @@ export async function createZoomMeeting({ topic, agenda, startTime, duration }) 
     
     if (!response.ok) {
       console.error("Zoom Create Meeting Error:", data);
-      throw new Error(data.message || "Failed to create Zoom meeting");
+      // Don't throw - just return empty values so meeting creation still works
+      console.warn("[Zoom] Failed to create Zoom meeting, proceeding without it.");
+      return { id: "", joinUrl: "", password: "" };
     }
 
     return {
@@ -98,11 +110,18 @@ export async function createZoomMeeting({ topic, agenda, startTime, duration }) 
     };
   } catch (error) {
     console.error("Zoom Service Error:", error);
-    throw error;
+    // Don't throw - just return empty values so meeting creation still works
+    console.warn("[Zoom] Error creating Zoom meeting, proceeding without it.");
+    return { id: "", joinUrl: "", password: "" };
   }
 }
 
 export async function deleteZoomMeeting(meetingId) {
+  if (!isZoomConfigured() || !meetingId) {
+    console.warn("[Zoom] Credentials not configured or no meeting ID. Skipping Zoom meeting deletion.");
+    return true;
+  }
+  
   try {
     const token = await getZoomAccessToken();
     
@@ -116,17 +135,22 @@ export async function deleteZoomMeeting(meetingId) {
     if (!response.ok && response.status !== 404) {
       const data = await response.json();
       console.error("Zoom Delete Meeting Error:", data);
-      throw new Error(data.message || "Failed to delete Zoom meeting");
+      // Don't throw - just log it
     }
     
     return true;
   } catch (error) {
     console.error("Zoom Service Error:", error);
-    return false;
+    return true; // Don't fail the whole operation
   }
 }
 
 export async function updateZoomMeeting(zoomMeetingId, { topic, agenda, startTime, duration }) {
+  if (!isZoomConfigured() || !zoomMeetingId) {
+    console.warn("[Zoom] Credentials not configured or no meeting ID. Skipping Zoom meeting update.");
+    return true;
+  }
+  
   try {
     const token = await getZoomAccessToken();
     
@@ -151,18 +175,20 @@ export async function updateZoomMeeting(zoomMeetingId, { topic, agenda, startTim
     if (!response.ok) {
       const data = await response.json();
       console.error("Zoom Update Meeting Error:", data);
-      throw new Error(data.message || "Failed to update Zoom meeting");
+      // Don't throw - just log it
     }
     
     return true;
   } catch (error) {
     console.error("Zoom Service Error:", error);
-    throw error;
+    return true; // Don't fail the whole operation
   }
 }
 
 export async function addZoomRegistrants(zoomMeetingId, attendees = []) {
-  if (!attendees || attendees.length === 0) return;
+  if (!isZoomConfigured() || !zoomMeetingId || !attendees || attendees.length === 0) {
+    return true;
+  }
 
   try {
     const token = await getZoomAccessToken();
@@ -199,6 +225,6 @@ export async function addZoomRegistrants(zoomMeetingId, attendees = []) {
     return true;
   } catch (error) {
     console.error("Zoom Registration Service Error:", error);
-    return false;
+    return true; // Don't fail the whole operation
   }
 }
