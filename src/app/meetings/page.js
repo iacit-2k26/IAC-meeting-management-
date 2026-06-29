@@ -259,6 +259,22 @@ export default function MeetingsPage() {
     loadData();
   }, []);
 
+  // Set default hostId when employees are loaded, using fixed host with fallback
+  useEffect(() => {
+    const activeEmployees = employees.filter(e => e.status === "active");
+    const fixedHostId = "emp-f6c99bd2";
+    const fixedHostExists = activeEmployees.some(emp => emp.id === fixedHostId);
+    const defaultHostId = fixedHostExists 
+      ? fixedHostId 
+      : activeEmployees.length > 0 
+        ? activeEmployees[0].id 
+        : "";
+    // Only update if we're not editing an existing meeting
+    if (!editingId && employees.length > 0) {
+      setForm(prev => ({ ...prev, hostId: defaultHostId }));
+    }
+  }, [employees, editingId]);
+
   const employeeMap = useMemo(
     () =>
       Object.fromEntries(
@@ -313,8 +329,17 @@ export default function MeetingsPage() {
   }, [meetings, query, dateRange, employeeMap, departmentMap]);
 
   const startCreate = () => {
+    const activeEmployees = employees.filter(e => e.status === "active");
+    const fixedHostId = "emp-f6c99bd2";
+    // Check if fixed host exists in active employees
+    const fixedHostExists = activeEmployees.some(emp => emp.id === fixedHostId);
+    const defaultHostId = fixedHostExists 
+      ? fixedHostId 
+      : activeEmployees.length > 0 
+        ? activeEmployees[0].id 
+        : "";
     setEditingId(null);
-    setForm(emptyForm);
+    setForm({ ...emptyForm, hostId: defaultHostId });
     setFeedback({ type: "", message: "" });
     setShowForm(true);
   };
