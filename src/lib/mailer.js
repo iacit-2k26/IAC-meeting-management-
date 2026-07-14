@@ -165,7 +165,7 @@ function buildInviteHtml({ attendeeName, meeting }) {
     </div>
 
     <div class="footer">
-      <p>Sent by <a href="mailto:${senderName}">${senderName}</a> via the Meeting Management System.</p>
+      <p>Sent by <a href="mailto:${senderName}">${senderName}</a> via the IAC Meeting Management System.</p>
       <p style="margin-top:6px;">If you believe this was sent in error, please ignore this email.</p>
     </div>
   </div>
@@ -338,4 +338,41 @@ export async function sendMeetingCancellationNotifications(meeting, attendees = 
       });
     })
   );
+}
+
+/**
+ * Send a password reset email.
+ */
+export async function sendPasswordResetEmail(toEmail, resetLink) {
+  const transporter = createTransporter();
+
+  try {
+    await transporter.verify();
+  } catch (err) {
+    console.error("[Mailer] SMTP connection failed:", err.message);
+    throw new Error("SMTP connection failed. Check SMTP_HOST, SMTP_USER, SMTP_PASSWORD in .env");
+  }
+
+  await transporter.sendMail({
+    from: `"IAC Meeting Management" <${process.env.SMTP_USER}>`,
+    to: toEmail,
+    subject: "Password Reset Request",
+    html: `
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+  <p>Hi there,</p>
+  <p>We received a request to reset the password for your account. Click the button below to set a new password.</p>
+  <p><a href="${resetLink}" style="display: inline-block; padding: 10px 20px; background-color: #2B3990; color: white; text-decoration: none; border-radius: 4px;">Reset Password</a></p>
+  <p>If you didn't request this, you can safely ignore this email. Your password won't change unless you click the button above.</p>
+  <p>This link will expire in 1 hour for security reasons.</p>
+</div>`,
+    text: `Hi there,
+
+We received a request to reset the password for your account. Click the link below to set a new password:
+
+${resetLink}
+
+If you didn't request this, you can safely ignore this email. Your password won't change unless you click the link above.
+
+This link will expire in 1 hour for security reasons.`,
+  });
 }

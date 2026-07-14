@@ -99,7 +99,7 @@ function buildCalendarEvent(meeting, attendees = []) {
     zoomJoinUrl ? `🔗 Join Zoom Meeting:\n${zoomJoinUrl}` : "",
     zoomPassword ? `🔑 Password: ${zoomPassword}` : "",
     "",
-    "This event was created by the Meeting Management System.",
+    "This event was created by the IAC Meeting Management System.",
   ]
     .filter(Boolean)
     .join("\n");

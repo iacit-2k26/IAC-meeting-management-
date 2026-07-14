@@ -52,7 +52,7 @@ export function formatDescription(text) {
     /^meeting chat link/i,
     /microsoft teams meeting/i,
     /view meeting insights/i,
-    /this event was created by the meeting management system/i,
+    /this event was created by the IAC meeting management system/i,
     /🔗 join zoom meeting/i,
     /🔑 password/i,
     /📋 agenda/i,
