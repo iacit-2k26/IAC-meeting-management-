@@ -104,7 +104,7 @@ function buildCalendarEvent(meeting, attendees = []) {
     .filter(Boolean)
     .join("\n");
 
-  return {
+  const eventResource = {
     summary: eventTitle,
     description,
     start: {
@@ -134,6 +134,30 @@ function buildCalendarEvent(meeting, attendees = []) {
     visibility: "default",
     status: "confirmed",
   };
+
+  if (meeting.recurrence && meeting.recurrence !== "none" && meeting.recurrence !== "Does not repeat") {
+    let rule = null;
+    const rec = meeting.recurrence;
+    if (rec === "Daily") {
+      rule = "RRULE:FREQ=DAILY";
+    } else if (rec === "Weekly" || rec.startsWith("Weekly on")) {
+      rule = "RRULE:FREQ=WEEKLY";
+    } else if (rec === "Monthly" || rec.startsWith("Monthly on")) {
+      rule = "RRULE:FREQ=MONTHLY";
+    } else if (rec === "Annually" || rec.startsWith("Annually on")) {
+      rule = "RRULE:FREQ=YEARLY";
+    } else if (rec === "Every weekday (Monday to Friday)" || rec === "Weekday") {
+      rule = "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR";
+    } else if (rec.startsWith("RRULE:")) {
+      rule = rec;
+    }
+
+    if (rule) {
+      eventResource.recurrence = [rule];
+    }
+  }
+
+  return eventResource;
 }
 
 // ---------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, Clock, Calendar as CalendarIcon, ChevronDown } from "lucide-react";
 
@@ -24,26 +24,12 @@ function CustomDropdown({ value, options, onChange, label, width = "w-full" }) {
           if (el.contains(event.target)) return;
         }
         setIsOpen(false);
+        setDropdownCoords(null);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
-
-  useEffect(() => {
-    if (!isOpen) {
-      setDropdownCoords(null);
-      return;
-    }
-    if (!triggerRef.current) return;
-    
-    const rect = triggerRef.current.getBoundingClientRect();
-    setDropdownCoords({
-      top: rect.bottom + window.scrollY + 4,
-      left: rect.left + window.scrollX,
-      width: rect.width,
-    });
-  }, [isOpen]);
 
   const selectedOption = options.find((opt) => String(opt.value) === String(value));
 
@@ -66,6 +52,7 @@ function CustomDropdown({ value, options, onChange, label, width = "w-full" }) {
             e.preventDefault();
             onChange(opt.value);
             setIsOpen(false);
+            setDropdownCoords(null);
           }}
           className={`px-3 py-2 text-xs cursor-pointer transition-colors ${
             String(opt.value) === String(value) ? "bg-[#2B3990] text-white font-bold hover:bg-[#232e74]" : "text-slate-700 hover:bg-slate-50"
@@ -84,7 +71,18 @@ function CustomDropdown({ value, options, onChange, label, width = "w-full" }) {
         ref={triggerRef}
         onClick={(e) => {
           e.stopPropagation();
-          setIsOpen(!isOpen);
+          const nextOpen = !isOpen;
+          setIsOpen(nextOpen);
+          if (nextOpen && triggerRef.current) {
+            const rect = triggerRef.current.getBoundingClientRect();
+            setDropdownCoords({
+              top: rect.bottom + window.scrollY + 4,
+              left: rect.left + window.scrollX,
+              width: rect.width,
+            });
+          } else {
+            setDropdownCoords(null);
+          }
         }}
         className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-medium cursor-pointer hover:border-[#2B3990]/30 transition-all"
       >
@@ -107,27 +105,22 @@ export default function DateTimePicker({ value, onChange, placeholder = "Select 
   const [selectedDate, setSelectedDate] = useState(value ? new Date(value) : new Date());
   const [viewDate, setViewDate] = useState(new Date(selectedDate));
 
-  useEffect(() => {
-    if (!isOpen) {
-      setPopoverCoords(null);
-      return;
-    }
+  const updatePosition = useCallback(() => {
     if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const popoverH = 340; 
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const openUpward = spaceBelow < popoverH && rect.top > spaceBelow;
 
-    const updatePosition = () => {
-      if (!triggerRef.current) return;
-      const rect = triggerRef.current.getBoundingClientRect();
-      const popoverH = 340; 
-      const spaceBelow = window.innerHeight - rect.bottom;
-      const openUpward = spaceBelow < popoverH && rect.top > spaceBelow;
+    setPopoverCoords(
+      openUpward
+        ? { bottom: window.innerHeight - rect.top + 4, left: rect.left, width: rect.width }
+        : { top: rect.bottom + 4, left: rect.left, width: rect.width }
+    );
+  }, []);
 
-      setPopoverCoords(
-        openUpward
-          ? { bottom: window.innerHeight - rect.top + 4, left: rect.left, width: rect.width }
-          : { top: rect.bottom + 4, left: rect.left, width: rect.width }
-      );
-    };
-
+  useEffect(() => {
+    if (!isOpen) return;
     updatePosition();
     window.addEventListener("scroll", updatePosition, true);
     window.addEventListener("resize", updatePosition);
@@ -135,7 +128,7 @@ export default function DateTimePicker({ value, onChange, placeholder = "Select 
       window.removeEventListener("scroll", updatePosition, true);
       window.removeEventListener("resize", updatePosition);
     };
-  }, [isOpen]);
+  }, [isOpen, updatePosition]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -153,6 +146,7 @@ export default function DateTimePicker({ value, onChange, placeholder = "Select 
       }
       
       setIsOpen(false);
+      setPopoverCoords(null);
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -256,6 +250,13 @@ export default function DateTimePicker({ value, onChange, placeholder = "Select 
     return cells;
   };
 
+  const popoverWidth = 310;
+  const getPopoverLeft = () => {
+    if (popoverCoords?.left === undefined) return undefined;
+    if (typeof window === "undefined") return popoverCoords.left;
+    return Math.max(12, Math.min(popoverCoords.left, window.innerWidth - popoverWidth - 12));
+  };
+
   const popoverContent = popoverCoords ? (
     <div
       id="datetime-picker-popover"
@@ -263,8 +264,8 @@ export default function DateTimePicker({ value, onChange, placeholder = "Select 
       style={{
         top: popoverCoords.top !== undefined ? `${popoverCoords.top}px` : undefined,
         bottom: popoverCoords.bottom !== undefined ? `${popoverCoords.bottom}px` : undefined,
-        left: `${popoverCoords.left}px`,
-        width: `${Math.min(popoverCoords.width, 320)}px`,
+        left: getPopoverLeft() !== undefined ? `${getPopoverLeft()}px` : undefined,
+        width: `${popoverWidth}px`,
       }}
     >
       <div className="flex flex-col gap-3">
@@ -293,7 +294,7 @@ export default function DateTimePicker({ value, onChange, placeholder = "Select 
                 </div>
               </div>
 
-              <div className="grid grid-cols-7 gap-0.5">
+              <div className="grid grid-cols-7 gap-0.5 justify-items-center">
                 {DAYS.map((day) => (
                   <div key={day} className="h-8 w-8 flex items-center justify-center text-[10px] font-bold text-slate-400 uppercase">
                     {day}
@@ -384,7 +385,11 @@ export default function DateTimePicker({ value, onChange, placeholder = "Select 
       <div
         ref={triggerRef}
         onClick={() => {
-          if (!isOpen) setStep("date");
+          if (!isOpen) {
+            setStep("date");
+          } else {
+            setPopoverCoords(null);
+          }
           setIsOpen(!isOpen);
         }}
         className="flex items-center justify-between w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-white cursor-pointer hover:border-[#2B3990]/30 transition-all shadow-sm"

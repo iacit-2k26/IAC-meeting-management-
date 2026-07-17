@@ -376,3 +376,42 @@ If you didn't request this, you can safely ignore this email. Your password won'
 This link will expire in 1 hour for security reasons.`,
   });
 }
+
+/**
+ * Send an account activation email when admin approves the user.
+ */
+export async function sendAccountActivatedEmail(toEmail, fullName) {
+  const transporter = createTransporter();
+
+  try {
+    await transporter.verify();
+  } catch (err) {
+    console.error("[Mailer] SMTP connection failed:", err.message);
+    throw new Error("SMTP connection failed. Check SMTP_HOST, SMTP_USER, SMTP_PASSWORD in .env");
+  }
+
+  await transporter.sendMail({
+    from: `"IAC Meeting Management" <${process.env.SMTP_USER}>`,
+    to: toEmail,
+    subject: "Account Activated - IAC Meeting Central",
+    html: `
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 20px auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+  <h2 style="color: #2B3990;">Account Activated!</h2>
+  <p>Hi ${fullName},</p>
+  <p>Good news! Your account on **IAC Meeting Central** has been approved and activated by the administrator.</p>
+  <p>You can now log in using your registered email and password to access the dashboard and manage meetings.</p>
+  <p style="margin-top: 24px;"><a href="${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/login" style="display: inline-block; padding: 12px 24px; background-color: #2B3990; color: white; text-decoration: none; border-radius: 6px; font-weight: bold;">Log In Now</a></p>
+  <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
+  <p style="font-size: 12px; color: #64748b;">This email was sent automatically. If you did not register for an account, please ignore this email.</p>
+</div>`,
+    text: `Hi ${fullName},
+
+Good news! Your account on IAC Meeting Central has been approved and activated by the administrator.
+
+You can now log in using your registered email and password:
+${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/login
+
+Thank you,
+IAC Meeting Management Team`,
+  });
+}

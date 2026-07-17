@@ -45,7 +45,9 @@ function subscribeToSidebarPreference(callback) {
 }
 
 function getSidebarPreferenceSnapshot() {
-  return window.localStorage.getItem("sidebar-collapsed") === "true";
+  const item = window.localStorage.getItem("sidebar-collapsed");
+  if (item === null) return true;
+  return item === "true";
 }
 
 export default function ClientLayout({ children }) {
@@ -62,7 +64,7 @@ export default function ClientLayout({ children }) {
   const collapsed = useSyncExternalStore(
     subscribeToSidebarPreference,
     getSidebarPreferenceSnapshot,
-    () => false
+    () => true
   );
 
   const handleToggleCollapse = (value) => {

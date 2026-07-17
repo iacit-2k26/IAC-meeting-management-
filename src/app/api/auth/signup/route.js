@@ -35,6 +35,7 @@ export async function POST(request) {
       employeeId,
       password: hashedPassword,
       role: "user",
+      status: "pending",
       createdAt: new Date(),
     };
 
@@ -45,19 +46,10 @@ export async function POST(request) {
       email: newUser.email,
       fullName: newUser.fullName,
       role: newUser.role,
+      status: newUser.status,
     };
 
-    // Auto-login after signup
-    const token = await createToken({ uid: user.uid, email: user.email, role: user.role });
-    const response = NextResponse.json({ user });
-    
-    response.cookies.set("auth_session", token, { 
-      httpOnly: true, 
-      secure: process.env.NODE_ENV === "production",
-      maxAge: 60 * 60 * 24 * 7 // 1 week
-    });
-
-    return response;
+    return NextResponse.json({ user, message: "Signup successful. Your account is pending admin approval." });
   } catch (error) {
     console.error("Signup error:", error);
     return NextResponse.json({ error: "Signup failed" }, { status: 400 });

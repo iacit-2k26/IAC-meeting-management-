@@ -19,16 +19,23 @@ export async function GET(request) {
     const db = await getDatabase();
     const user = await db.collection("users").findOne({ _id: new ObjectId(payload.uid) });
 
-    if (!user) {
+    if (!user || user.status === "pending") {
       return NextResponse.json({ user: null });
     }
+
+    // Update lastSeen immediately on session check
+    await db.collection("users").updateOne(
+      { _id: user._id },
+      { $set: { lastSeen: new Date(), isOnline: true } }
+    );
 
     return NextResponse.json({ 
       user: {
         uid: user._id.toString(),
         email: user.email,
         fullName: user.fullName,
-        role: user.role
+        role: user.role,
+        status: user.status || "active"
       }
     });
   } catch (error) {

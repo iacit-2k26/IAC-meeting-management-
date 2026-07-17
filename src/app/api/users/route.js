@@ -23,17 +23,21 @@ export async function GET(request) {
   const deptMap = Object.fromEntries(departments.map((d) => [d.id, d.name]));
   const empMap = Object.fromEntries(employees.map((e) => [e.employeeId, deptMap[e.departmentId] || null]));
 
-  const sanitized = users.map((u) => ({
-    uid: u._id.toString(),
-    fullName: u.fullName,
-    email: u.email,
-    employeeId: u.employeeId,
-    role: u.role || "user",
-    department: empMap[u.employeeId] || null,
-    lastSeen: u.lastSeen || null,
-    isOnline: u.isOnline || false,
-    createdAt: u.createdAt,
-  }));
+  const sanitized = users.map((u) => {
+    const isOnline = u.lastSeen ? (new Date() - new Date(u.lastSeen)) < 75000 : false;
+    return {
+      uid: u._id.toString(),
+      fullName: u.fullName,
+      email: u.email,
+      employeeId: u.employeeId,
+      role: u.role || "user",
+      status: u.status || "active",
+      department: empMap[u.employeeId] || null,
+      lastSeen: u.lastSeen || null,
+      isOnline: isOnline,
+      createdAt: u.createdAt,
+    };
+  });
 
   return NextResponse.json({ data: sanitized });
 }

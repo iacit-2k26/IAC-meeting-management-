@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Calendar, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock, HelpCircle, Loader2, Mail, Pencil, Plus, RefreshCw, Search, Trash2, User, Users, UsersRound, X, XCircle } from "lucide-react";
+import { Calendar, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock, HelpCircle, Loader2, Mail, Pencil, Plus, RefreshCw, Repeat, Search, Trash2, User, Users, UsersRound, X, XCircle } from "lucide-react";
 import CustomSelect from "@/components/ui/CustomSelect";
 import DateTimePicker from "@/components/ui/DateTimePicker";
 import DatePicker from "@/components/ui/DatePicker";
@@ -85,6 +85,7 @@ const emptyForm = {
   location: "",
   isVirtual: true,
   attendeeSearch: "",
+  recurrence: "Does not repeat",
 };
 
 // Meeting templates
@@ -218,6 +219,7 @@ export default function MeetingsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [feedback, setFeedback] = useState({ type: "", message: "" });
+  const [showOnlyRepeating, setShowOnlyRepeating] = useState(false);
 
   // Delete modal state
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, meeting: null, isDeleting: false });
@@ -312,7 +314,12 @@ export default function MeetingsPage() {
       
       if (!isWithinDateRange) return false;
 
-      // 2. Search Query Filter
+      // 2. Repeat Meetings Filter
+      if (showOnlyRepeating && (!meeting.recurrence || meeting.recurrence === "Does not repeat")) {
+        return false;
+      }
+
+      // 3. Search Query Filter
       if (!normalizedQuery) return true;
 
       return [
@@ -326,7 +333,7 @@ export default function MeetingsPage() {
         .toLowerCase()
         .includes(normalizedQuery);
     });
-  }, [meetings, query, dateRange, employeeMap, departmentMap]);
+  }, [meetings, query, dateRange, employeeMap, departmentMap, showOnlyRepeating]);
 
   const startCreate = () => {
     const activeEmployees = employees.filter(e => e.status === "active");
@@ -359,6 +366,7 @@ export default function MeetingsPage() {
       location: meeting.location || "",
       isVirtual: meeting.isVirtual !== undefined ? meeting.isVirtual : true,
       attendeeSearch: "",
+      recurrence: meeting.recurrence || "Does not repeat",
     });
     setFeedback({ type: "", message: "" });
     setShowForm(true);
@@ -611,10 +619,13 @@ export default function MeetingsPage() {
               <div className="mt-3 inline-flex items-center gap-2 rounded-xl border border-[#2B3990]/50 bg-blue-50 px-3 py-1.5">
                 <CalendarDays size={14} className="text-[#2B3990]" />
                 <span className="text-sm font-semibold text-[#2B3990]">
-                  {filteredMeetings.filter((m) => {
-                    const today = new Date().toLocaleDateString("en-CA");
-                    return new Date(m.scheduleDateTime).toLocaleDateString("en-CA") === today && m.status === "upcoming";
-                  }).length} upcoming today
+                  {meetings.filter((m) => {
+                    const d1 = new Date();
+                    const d2 = new Date(m.scheduleDateTime);
+                    return d1.getFullYear() === d2.getFullYear() &&
+                           d1.getMonth() === d2.getMonth() &&
+                           d1.getDate() === d2.getDate();
+                  }).length} meetings today
                 </span>
               </div>
             </div>
@@ -694,6 +705,18 @@ export default function MeetingsPage() {
               >
                 Today
               </button>
+              <button
+                type="button"
+                onClick={() => setShowOnlyRepeating(prev => !prev)}
+                className={`px-4 py-2 text-xs font-bold rounded-lg border transition-all flex items-center gap-1.5 shadow-sm ${
+                  showOnlyRepeating
+                    ? "bg-[#2B3990]/10 border-[#2B3990] text-[#2B3990]"
+                    : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                <Repeat size={13} />
+                {showOnlyRepeating ? "Showing Repeating Only" : "Filter Repeating Meetings"}
+              </button>
             </div>
           </div>
 
@@ -722,16 +745,28 @@ export default function MeetingsPage() {
                     <TableCell className="max-w-[260px]">
                       <div className="flex flex-col gap-1">
                         {meeting.isVirtual ? (
-                          <span className="font-semibold text-slate-800">
+                          <span className="font-semibold text-slate-800 flex items-center gap-1.5 flex-wrap">
                             {meeting.title}{meeting.meetingType ? ` – ${meeting.meetingType}` : ""}
+                            {meeting.recurrence && meeting.recurrence !== "Does not repeat" && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-[#2B3990]/10 text-[#2B3990] text-[10px] font-semibold">
+                                <Repeat size={10} /> {meeting.recurrence}
+                              </span>
+                            )}
                           </span>
                         ) : (
-                          <Link
-                            href={`/meetings/${meeting.id}`}
-                            className="font-semibold text-slate-800 hover:text-[#2B3990]"
-                          >
-                            {meeting.title}{meeting.meetingType ? ` – ${meeting.meetingType}` : ""}
-                          </Link>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <Link
+                              href={`/meetings/${meeting.id}`}
+                              className="font-semibold text-slate-800 hover:text-[#2B3990]"
+                            >
+                              {meeting.title}{meeting.meetingType ? ` – ${meeting.meetingType}` : ""}
+                            </Link>
+                            {meeting.recurrence && meeting.recurrence !== "Does not repeat" && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-[#2B3990]/10 text-[#2B3990] text-[10px] font-semibold">
+                                <Repeat size={10} /> {meeting.recurrence}
+                              </span>
+                            )}
+                          </div>
                         )}
                         <div
                           className="mt-1 text-xs text-slate-500 line-clamp-4"
@@ -829,7 +864,7 @@ export default function MeetingsPage() {
             className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
             onClick={resetForm}
           />
-          <div className="relative w-full max-w-7xl max-h-[90vh] flex flex-col">
+          <div className="relative w-full max-w-[85vw] max-h-[90vh] flex flex-col">
             <form onSubmit={submitForm} className="relative rounded-2xl border border-slate-200 bg-white shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
               {/* Fixed header */}
               <div className="flex items-center justify-between px-4 pt-3 pb-2.5 border-b border-slate-100 shrink-0">
@@ -851,7 +886,7 @@ export default function MeetingsPage() {
               {/* Split body */}
               <div className="flex flex-1 min-h-0">
                 {/* Left: Form */}
-                <div className="w-1/2 overflow-y-auto px-4 py-3 space-y-2.5 border-r border-slate-200">
+                <div className="w-7/12 overflow-y-auto px-4 py-3 space-y-2.5 border-r border-slate-200">
                   {feedback.message && (
                     <div
                       className={`rounded-xl border px-3 py-2 text-sm ${
@@ -867,7 +902,7 @@ export default function MeetingsPage() {
                   {/* Template Selection */}
                   <div>
                     <p className="mb-1.5 text-xs font-semibold text-slate-700">Use a template (optional)</p>
-                    <div className="grid grid-cols-2 gap-1.5">
+                    <div className="grid grid-cols-3 gap-1.5">
                       {MEETING_TEMPLATES.map((template, index) => (
                         <button
                           key={index}
@@ -905,9 +940,8 @@ export default function MeetingsPage() {
                       />
                     </Field>
                   </div>
-                  <Field label="Agenda">
+                  <Field label="Agenda (optional)">
                     <textarea
-                      required
                       rows={2}
                       value={form.agenda}
                       onChange={(event) => setForm((current) => ({ ...current, agenda: event.target.value }))}
@@ -915,7 +949,7 @@ export default function MeetingsPage() {
                       className="input-base"
                     />
                   </Field>
-                  <div className="grid gap-3 lg:grid-cols-2">
+                  <div className="grid gap-3 lg:grid-cols-3">
                     <Field label="Schedule">
                       <DateTimePicker
                         value={form.scheduleDateTime}
@@ -931,6 +965,20 @@ export default function MeetingsPage() {
                         value={form.duration}
                         onChange={(event) => setForm((current) => ({ ...current, duration: event.target.value }))}
                         className="input-base"
+                      />
+                    </Field>
+                    <Field label="Repeat">
+                      <CustomSelect
+                        value={form.recurrence || "Does not repeat"}
+                        onChange={(val) => setForm((current) => ({ ...current, recurrence: val }))}
+                        options={[
+                          { value: "Does not repeat", label: "Does not repeat" },
+                          { value: "Daily", label: "Daily" },
+                          { value: "Weekly", label: "Weekly" },
+                          { value: "Monthly", label: "Monthly" },
+                          { value: "Annually", label: "Annually" },
+                          { value: "Every weekday (Monday to Friday)", label: "Every weekday (Monday to Friday)" },
+                        ]}
                       />
                     </Field>
                   </div>
@@ -951,151 +999,159 @@ export default function MeetingsPage() {
                     />
                   </Field>
 
-                  <div className="grid gap-3">
-                    <Field label="Location Preference">
-                      <div className="flex gap-3">
-                        <label className="flex items-center gap-1.5 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="locationType"
-                            checked={form.isVirtual}
-                            onChange={() => setForm(prev => ({ ...prev, isVirtual: true, location: "" }))}
-                            className="h-3.5 w-3.5 text-[#2B3990] border-slate-300 focus:ring-[#2B3990]"
-                          />
-                          <span className="text-sm font-medium text-slate-700">Online (Zoom)</span>
-                        </label>
-                        <label className="flex items-center gap-1.5 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="locationType"
-                            checked={!form.isVirtual}
-                            onChange={() => setForm(prev => ({ ...prev, isVirtual: false }))}
-                            className="h-3.5 w-3.5 text-[#2B3990] border-slate-300 focus:ring-[#2B3990]"
-                          />
-                          <span className="text-sm font-medium text-slate-700">In Person + Zoom</span>
-                        </label>
+                  <div className="grid grid-cols-2 gap-4">
+                    {/* Left Column: Location & Departments */}
+                    <div className="flex flex-col gap-3">
+                      <div>
+                        <Field label="Location Preference">
+                          <div className="flex gap-3">
+                            <label className="flex items-center gap-1.5 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="locationType"
+                                checked={form.isVirtual}
+                                onChange={() => setForm(prev => ({ ...prev, isVirtual: true, location: "" }))}
+                                className="h-3.5 w-3.5 text-[#2B3990] border-slate-300 focus:ring-[#2B3990]"
+                              />
+                              <span className="text-sm font-medium text-slate-700">Online (Zoom)</span>
+                            </label>
+                            <label className="flex items-center gap-1.5 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="locationType"
+                                checked={!form.isVirtual}
+                                onChange={() => setForm(prev => ({ ...prev, isVirtual: false }))}
+                                className="h-3.5 w-3.5 text-[#2B3990] border-slate-300 focus:ring-[#2B3990]"
+                              />
+                              <span className="text-sm font-medium text-slate-700">In Person + Zoom</span>
+                            </label>
+                          </div>
+                        </Field>
+
+                        {!form.isVirtual && (
+                          <div className="mt-2">
+                            <Field label="Physical Location">
+                              <input
+                                required
+                                value={form.location}
+                                onChange={(event) => setForm((current) => ({ ...current, location: event.target.value }))}
+                                placeholder="e.g., Conference Room A, Floor 2"
+                                className="input-base"
+                              />
+                            </Field>
+                          </div>
+                        )}
                       </div>
-                    </Field>
 
-                    {!form.isVirtual && (
-                      <Field label="Physical Location">
-                        <input
-                          required
-                          value={form.location}
-                          onChange={(event) => setForm((current) => ({ ...current, location: event.target.value }))}
-                          placeholder="e.g., Conference Room A, Floor 2"
-                          className="input-base"
-                        />
-                      </Field>
-                    )}
-                  </div>
-
-                  <ChecklistGroup
-                    className="h-60"
-                    title="Departments"
-                    items={departments.map((department) => ({ id: department.id, label: department.name }))}
-                    selectedItems={form.departmentIds}
-                    onToggle={handleDepartmentToggle}
-                  />
-
-                  <div className="flex h-60 flex-col">
-                    <p className="mb-1 text-xs font-semibold text-slate-700">Internal attendees</p>
-                    <div className="relative mb-1.5">
-                      <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input
-                        type="text"
-                        placeholder="Search employees..."
-                        value={form.attendeeSearch || ""}
-                        onChange={(e) => setForm(prev => ({ ...prev, attendeeSearch: e.target.value }))}
-                        className="w-full pl-7 pr-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-[#2B3990]/30"
+                      <ChecklistGroup
+                        className="h-[200px]"
+                        title="Departments"
+                        items={departments.map((department) => ({ id: department.id, label: department.name }))}
+                        selectedItems={form.departmentIds}
+                        onToggle={handleDepartmentToggle}
                       />
                     </div>
-                    <div className="flex-1 min-h-0 space-y-1.5 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50/60 p-1.5">
-                      {departments.map(dept => {
-                        const deptEmployees = groupedEmployees[dept.id] || [];
-                        const searchTerm = (form.attendeeSearch || "").toLowerCase();
-                        const filteredDeptEmployees = deptEmployees.filter(emp => 
-                          `${emp.firstName} ${emp.lastName} · ${emp.designation || emp.role}`.toLowerCase().includes(searchTerm)
-                        );
-                        if (filteredDeptEmployees.length === 0) return null;
-                        
-                        return (
-                          <div key={dept.id} className="space-y-0.5">
-                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider pl-1">{dept.name}</p>
-                            {filteredDeptEmployees.map(emp => {
-                              const checked = form.internalAttendeeIds.includes(emp.id);
-                              return (
-                                <button
-                                  key={emp.id}
-                                  type="button"
-                                  onClick={() => toggleArrayValue("internalAttendeeIds", emp.id)}
-                                  className={`flex w-full items-center gap-2 rounded-md px-1.5 py-0.5 text-left text-xs transition-colors ${
-                                    checked
-                                      ? "bg-[#2B3990]/8 text-[#2B3990]"
-                                      : "text-slate-700 hover:bg-white"
-                                  }`}
-                                >
-                                  <span className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border transition-all ${
-                                    checked
-                                      ? "border-[#2B3990] bg-[#2B3990]"
-                                      : "border-slate-300 bg-white"
-                                  }`}>
-                                    {checked && (
-                                      <svg width="8" height="6" viewBox="0 0 9 7" fill="none">
-                                        <path d="M1 3L3.5 5.5L8 1" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-                                      </svg>
-                                    )}
-                                  </span>
-                                  <span className="leading-snug">{emp.firstName} {emp.lastName} · {emp.designation || emp.role}</span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        );
-                      })}
-                      {/* Show employees without department (if any) */}
-                      {(() => {
-                        const searchTerm = (form.attendeeSearch || "").toLowerCase();
-                        const employeesWithoutDept = employees.filter(
-                          e => e.status === "active" && !e.departmentId && 
-                          `${e.firstName} ${e.lastName} · ${e.designation || e.role}`.toLowerCase().includes(searchTerm)
-                        );
-                        if (employeesWithoutDept.length === 0) return null;
-                        
-                        return (
-                          <div key="no-dept" className="space-y-0.5">
-                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider pl-1">Other</p>
-                            {employeesWithoutDept.map(emp => {
-                              const checked = form.internalAttendeeIds.includes(emp.id);
-                              return (
-                                <button
-                                  key={emp.id}
-                                  type="button"
-                                  onClick={() => toggleArrayValue("internalAttendeeIds", emp.id)}
-                                  className={`flex w-full items-center gap-2 rounded-md px-1.5 py-0.5 text-left text-xs transition-colors ${
-                                    checked
-                                      ? "bg-[#2B3990]/8 text-[#2B3990]"
-                                      : "text-slate-700 hover:bg-white"
-                                  }`}
-                                >
-                                  <span className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border transition-all ${
-                                    checked
-                                      ? "border-[#2B3990] bg-[#2B3990]"
-                                      : "border-slate-300 bg-white"
-                                  }`}>
-                                    {checked && (
-                                      <svg width="8" height="6" viewBox="0 0 9 7" fill="none">
-                                        <path d="M1 3L3.5 5.5L8 1" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-                                      </svg>
-                                    )}
-                                  </span>
-                                  <span className="leading-snug">{emp.firstName} {emp.lastName} · {emp.designation || emp.role}</span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        );
-                      })()}
+
+                    {/* Right Column: Internal attendees */}
+                    <div className="flex flex-col">
+                      <p className="mb-1 text-xs font-semibold text-slate-700">Internal attendees</p>
+                      <div className="relative mb-1.5 shrink-0">
+                        <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type="text"
+                          placeholder="Search employees..."
+                          value={form.attendeeSearch || ""}
+                          onChange={(e) => setForm(prev => ({ ...prev, attendeeSearch: e.target.value }))}
+                          className="w-full pl-7 pr-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-[#2B3990]/30"
+                        />
+                      </div>
+                      <div className="h-[200px] space-y-1.5 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50/60 p-1.5">
+                        {departments.map(dept => {
+                          const deptEmployees = groupedEmployees[dept.id] || [];
+                          const searchTerm = (form.attendeeSearch || "").toLowerCase();
+                          const filteredDeptEmployees = deptEmployees.filter(emp => 
+                            `${emp.firstName} ${emp.lastName} · ${emp.designation || emp.role}`.toLowerCase().includes(searchTerm)
+                          );
+                          if (filteredDeptEmployees.length === 0) return null;
+                          
+                          return (
+                            <div key={dept.id} className="space-y-0.5">
+                              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider pl-1">{dept.name}</p>
+                              {filteredDeptEmployees.map(emp => {
+                                const checked = form.internalAttendeeIds.includes(emp.id);
+                                return (
+                                  <button
+                                    key={emp.id}
+                                    type="button"
+                                    onClick={() => toggleArrayValue("internalAttendeeIds", emp.id)}
+                                    className={`flex w-full items-center gap-2 rounded-md px-1.5 py-0.5 text-left text-xs transition-colors ${
+                                      checked
+                                        ? "bg-[#2B3990]/8 text-[#2B3990]"
+                                        : "text-slate-700 hover:bg-white"
+                                    }`}
+                                  >
+                                    <span className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border transition-all ${
+                                      checked
+                                        ? "border-[#2B3990] bg-[#2B3990]"
+                                        : "border-slate-300 bg-white"
+                                    }`}>
+                                      {checked && (
+                                        <svg width="8" height="6" viewBox="0 0 9 7" fill="none">
+                                          <path d="M1 3L3.5 5.5L8 1" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                                        </svg>
+                                      )}
+                                    </span>
+                                    <span className="leading-snug">{emp.firstName} {emp.lastName} · {emp.designation || emp.role}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          );
+                        })}
+                        {/* Show employees without department (if any) */}
+                        {(() => {
+                          const searchTerm = (form.attendeeSearch || "").toLowerCase();
+                          const employeesWithoutDept = employees.filter(
+                            e => e.status === "active" && !e.departmentId && 
+                            `${e.firstName} ${e.lastName} · ${e.designation || e.role}`.toLowerCase().includes(searchTerm)
+                          );
+                          if (employeesWithoutDept.length === 0) return null;
+                          
+                          return (
+                            <div key="no-dept" className="space-y-0.5">
+                              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider pl-1">Other</p>
+                              {employeesWithoutDept.map(emp => {
+                                const checked = form.internalAttendeeIds.includes(emp.id);
+                                return (
+                                  <button
+                                    key={emp.id}
+                                    type="button"
+                                    onClick={() => toggleArrayValue("internalAttendeeIds", emp.id)}
+                                    className={`flex w-full items-center gap-2 rounded-md px-1.5 py-0.5 text-left text-xs transition-colors ${
+                                      checked
+                                        ? "bg-[#2B3990]/8 text-[#2B3990]"
+                                        : "text-slate-700 hover:bg-white"
+                                    }`}
+                                  >
+                                    <span className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border transition-all ${
+                                      checked
+                                        ? "border-[#2B3990] bg-[#2B3990]"
+                                        : "border-slate-300 bg-white"
+                                    }`}>
+                                      {checked && (
+                                        <svg width="8" height="6" viewBox="0 0 9 7" fill="none">
+                                          <path d="M1 3L3.5 5.5L8 1" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                                        </svg>
+                                      )}
+                                    </span>
+                                    <span className="leading-snug">{emp.firstName} {emp.lastName} · {emp.designation || emp.role}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          );
+                        })()}
+                      </div>
                     </div>
                   </div>
 
@@ -1111,7 +1167,7 @@ export default function MeetingsPage() {
                 </div>
 
                 {/* Right: Availability */}
-                <div className="w-1/2 overflow-y-auto px-4 py-3 bg-slate-50/30">
+                <div className="w-5/12 overflow-y-auto px-4 py-3 bg-slate-50/30">
                   <div className="space-y-4">
                     <div>
                       <p className="text-xs font-semibold text-slate-700 mb-2 flex items-center gap-1">

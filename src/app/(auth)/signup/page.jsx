@@ -58,9 +58,9 @@ export default function SignupPage() {
         employeeId: formData.employeeId,
       });
       
-      toast.success("Account created successfully!", {
-        description: "You can now sign in to your account.",
-        duration: 4000,
+      toast.success("Account created!", {
+        description: "Your account is pending admin approval. You will be notified via email when it is activated.",
+        duration: 8000,
       });
       router.replace("/login");
     } catch (err) {

@@ -100,9 +100,22 @@ export default function DatePicker({ value, onChange, placeholder = "Select date
     ? parsed.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
     : "";
 
+  const popoverWidth = 280;
+  const getPopoverLeft = () => {
+    if (coords.left === undefined) return undefined;
+    if (typeof window === "undefined") return coords.left;
+    return Math.max(12, Math.min(coords.left, window.innerWidth - popoverWidth - 12));
+  };
+
   const popover = (
     <div id="datepicker-pop"
-      style={{ position: "fixed", zIndex: 99999, width: 256, ...coords }}
+      style={{
+        position: "fixed",
+        zIndex: 99999,
+        width: popoverWidth,
+        ...coords,
+        left: getPopoverLeft() !== undefined ? `${getPopoverLeft()}px` : undefined
+      }}
       className="bg-white border border-slate-200 rounded-xl shadow-2xl p-4"
     >
       {/* Header */}
@@ -116,13 +129,13 @@ export default function DatePicker({ value, onChange, placeholder = "Select date
         </button>
       </div>
       {/* Day headers */}
-      <div className="grid grid-cols-7 mb-1">
+      <div className="grid grid-cols-7 mb-1 justify-items-center">
         {DAYS.map((d) => (
           <div key={d} className="h-8 w-8 flex items-center justify-center text-[10px] font-bold text-slate-400 uppercase">{d}</div>
         ))}
       </div>
       {/* Cells */}
-      <div className="grid grid-cols-7 gap-0.5">{cells}</div>
+      <div className="grid grid-cols-7 gap-0.5 justify-items-center">{cells}</div>
       {/* Footer */}
       <div className="mt-3 flex justify-between items-center border-t border-slate-100 pt-2">
         <button type="button" onClick={() => { onChange(""); setOpen(false); }}

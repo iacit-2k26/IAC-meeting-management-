@@ -4,6 +4,8 @@ import { ObjectId } from "mongodb";
 import bcrypt from "bcryptjs";
 import { verifyToken } from "@/lib/jwt";
 
+import { sendAccountActivatedEmail } from "@/lib/mailer";
+
 async function requireAuth(request) {
   const token = request.cookies.get("auth_session")?.value;
   if (!token) return null;
@@ -28,9 +30,23 @@ export async function PUT(request, { params }) {
     if (body.email) updates.email = body.email.toLowerCase();
     if (body.employeeId) updates.employeeId = body.employeeId;
     if (body.role) updates.role = body.role;
+    if (body.status) updates.status = body.status;
     if (body.password) updates.password = await bcrypt.hash(body.password, 10);
 
+    const oldStatus = user.status || "active";
+    const newStatus = updates.status || oldStatus;
+
     await col.updateOne({ _id: new ObjectId(id) }, { $set: updates });
+
+    // Send account activation email if status changes from pending to active
+    if (oldStatus === "pending" && newStatus === "active") {
+      try {
+        await sendAccountActivatedEmail(user.email, user.fullName);
+      } catch (mailErr) {
+        console.error("Failed to send activation email:", mailErr);
+      }
+    }
+
     return NextResponse.json({ data: { uid: id, ...updates } });
   } catch (error) {
     return NextResponse.json({ error: error.message || "Failed to update user." }, { status: 400 });

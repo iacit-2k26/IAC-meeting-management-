@@ -225,7 +225,7 @@ export default function Sidebar({ onNavigate, collapsed, setCollapsed }) {
               IAC Meeting Central
             </span>
             <span className="text-[9px] tracking-wide leading-tight mt-0.5" style={{ color: "#97a5bd" }}>
-              Enterprise Collaboration
+              Management System
             </span>
           </div>
 
@@ -288,13 +288,6 @@ export default function Sidebar({ onNavigate, collapsed, setCollapsed }) {
           >
             <LogOut size={16} />
             {showLabels && <span className="ml-3 text-[11px] font-semibold">Logout</span>}
-          </button>
-          <button
-            type="button"
-            onClick={() => setCollapsed(!collapsed)}
-            className="w-full text-[11px] font-semibold text-slate-500 hover:text-[#2B3990] transition-colors mt-1"
-          >
-            {collapsed ? "Expand" : "Collapse sidebar"}
           </button>
         </div>
       </aside>

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Pencil, Plus, RefreshCw, Search, Shield, Trash2, User, UserPlus, Users, X,
+  CheckCircle2, Pencil, Plus, RefreshCw, Search, Shield, Trash2, User, UserPlus, Users, X,
 } from "lucide-react";
 import TruckLoader from "@/components/TruckLoader";
 import StatusBadge from "@/components/ui/StatusBadge";
@@ -28,6 +28,7 @@ const emptyForm = {
   employeeId: "",
   password: "",
   role: "user",
+  status: "active",
 };
 
 async function readResponse(response) {
@@ -93,7 +94,7 @@ export default function UsersPage() {
 
   const openEdit = (user) => {
     setEditingId(user.uid);
-    setForm({ fullName: user.fullName, email: user.email, employeeId: user.employeeId, role: user.role, password: "" });
+    setForm({ fullName: user.fullName, email: user.email, employeeId: user.employeeId, role: user.role, status: user.status || "active", password: "" });
     setFeedback({ type: "", message: "" });
     setShowForm(true);
   };
@@ -125,6 +126,24 @@ export default function UsersPage() {
       setFeedback({ type: "error", message: err.message });
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleApproveUser = async (uid) => {
+    try {
+      setIsLoading(true);
+      const response = await fetch(`/api/users/${uid}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "active" }),
+      });
+      await readResponse(response);
+      await loadData(true);
+      setFeedback({ type: "success", message: "User approved and activated." });
+    } catch (err) {
+      setFeedback({ type: "error", message: err.message });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -216,11 +235,11 @@ export default function UsersPage() {
                 <TableHead className="w-[18%]">Email</TableHead>
                 <TableHead className="w-[9%]">Employee ID</TableHead>
                 <TableHead className="w-[10%]">Role</TableHead>
-                <TableHead className="w-[8%]">Status</TableHead>
+                <TableHead className="w-[12%]">Presence / Status</TableHead>
                 <TableHead className="w-[10%]">Department</TableHead>
                 <TableHead className="w-[12%]">UID</TableHead>
                 <TableHead className="w-[12%]">Last Seen</TableHead>
-                <TableHead className="w-[6%]">Action</TableHead>
+                <TableHead className="w-[8%]">Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -238,10 +257,21 @@ export default function UsersPage() {
                     <TableCell className="font-mono text-xs text-slate-500">{u.employeeId}</TableCell>
                     <TableCell><RoleBadge role={u.role} /></TableCell>
                     <TableCell>
-                      <span className={`inline-flex items-center gap-1.5 text-xs font-semibold ${u.isOnline ? "text-emerald-600" : "text-slate-400"}`}>
-                        <span className={`w-2 h-2 rounded-full ${u.isOnline ? "bg-emerald-500" : "bg-slate-300"}`} />
-                        {u.isOnline ? "Online" : "Offline"}
-                      </span>
+                      <div className="flex flex-col gap-1">
+                        <span className={`inline-flex items-center gap-1.5 text-xs font-semibold ${u.isOnline ? "text-emerald-600" : "text-slate-400"}`}>
+                          <span className={`w-2 h-2 rounded-full ${u.isOnline ? "bg-emerald-500" : "bg-slate-300"}`} />
+                          {u.isOnline ? "Online" : "Offline"}
+                        </span>
+                        {u.status === "pending" ? (
+                          <span className="inline-flex w-fit items-center rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-600/10">
+                            Pending Approval
+                          </span>
+                        ) : (
+                          <span className="inline-flex w-fit items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-600/10">
+                            Active
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="text-sm text-slate-500">{u.department || "—"}</TableCell>
                     <TableCell>
@@ -250,6 +280,13 @@ export default function UsersPage() {
                     <TableCell className="text-xs text-slate-500">{formatDate(u.lastSeen)}</TableCell>
                     <TableCell>
                       <div className="flex gap-1.5">
+                        {u.status === "pending" && (
+                          <button onClick={() => handleApproveUser(u.uid)}
+                            title="Approve User"
+                            className="rounded-lg bg-emerald-50 p-1.5 text-emerald-600 hover:bg-emerald-100 transition">
+                            <CheckCircle2 size={13} />
+                          </button>
+                        )}
                         <button onClick={() => openEdit(u)}
                           className="rounded-lg bg-slate-100 p-1.5 text-slate-600 hover:bg-slate-200 transition">
                           <Pencil size={13} />
@@ -318,6 +355,16 @@ export default function UsersPage() {
                       value={form.role}
                       onChange={(val) => setForm((p) => ({ ...p, role: val }))}
                       options={ROLES.map((r) => ({ value: r, label: r.charAt(0).toUpperCase() + r.slice(1).replace("_", " ") }))}
+                    />
+                  </Field>
+                  <Field label="Status">
+                    <CustomSelect
+                      value={form.status}
+                      onChange={(val) => setForm((p) => ({ ...p, status: val }))}
+                      options={[
+                        { value: "active", label: "Active" },
+                        { value: "pending", label: "Pending" }
+                      ]}
                     />
                   </Field>
                 </div>

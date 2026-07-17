@@ -24,12 +24,22 @@ export async function POST(request) {
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
     }
 
+    if (user.status === "pending") {
+      return NextResponse.json({ error: "Your account is pending admin approval." }, { status: 403 });
+    }
+
     const userData = {
       uid: user._id.toString(),
       email: user.email,
       fullName: user.fullName,
       role: user.role,
     };
+
+    // Update lastSeen immediately on successful login
+    await db.collection("users").updateOne(
+      { _id: user._id },
+      { $set: { lastSeen: new Date(), isOnline: true } }
+    );
 
     const token = await createToken({ uid: userData.uid, email: userData.email, role: userData.role });
     const response = NextResponse.json({ user: userData });

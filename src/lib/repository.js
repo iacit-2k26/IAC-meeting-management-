@@ -65,6 +65,7 @@ function normalizeMeetingPayload(payload = {}) {
     zoomPassword: String(payload.zoomPassword || "").trim(),
     // Google Calendar event ID — stored so we can update/delete later
     googleEventId: String(payload.googleEventId || "").trim(),
+    recurrence: String(payload.recurrence || "").trim(),
   };
 }
 
@@ -98,8 +99,8 @@ function validateDepartmentPayload(payload) {
 }
 
 function validateMeetingPayload(payload) {
-  if (!payload.title || !payload.hostId || !payload.scheduleDateTime || !payload.duration || !payload.agenda) {
-    throw new Error("Meeting title, host, schedule, duration, and agenda are required.");
+  if (!payload.title || !payload.hostId || !payload.scheduleDateTime || !payload.duration) {
+    throw new Error("Meeting title, host, schedule, and duration are required.");
   }
 }
 
@@ -385,7 +386,7 @@ export async function listMeetings(baseDate = null) {
   const dbGoogleEventIds = new Set();
   const mergedMeetings = dbMeetings
     .filter(m => {
-      const d = new Date(m.scheduleDateTime);
+      const d = parseAsIST(m.scheduleDateTime);
       const isInRange = d >= timeMin && d <= timeMax;
       if (isInRange && m.googleEventId) {
         dbGoogleEventIds.add(m.googleEventId);
@@ -395,7 +396,7 @@ export async function listMeetings(baseDate = null) {
     .map(m => {
       // Compute status dynamically from scheduleDateTime + duration
       const startTime = m.scheduleDateTime;
-      const endTime = new Date(new Date(startTime).getTime() + (m.duration || 0) * 60000).toISOString();
+      const endTime = new Date(parseAsIST(startTime).getTime() + (m.duration || 0) * 60000).toISOString();
       const computedStatus = getMeetingStatus(startTime, endTime);
 
       // If meeting is linked to Google Calendar, sync the attendees list
@@ -490,7 +491,7 @@ export async function getMeeting(meetingId) {
   const meeting = await collection.findOne({ id: meetingId });
   if (!meeting) return null;
   const startTime = meeting.scheduleDateTime;
-  const endTime = new Date(new Date(startTime).getTime() + (meeting.duration || 0) * 60000).toISOString();
+  const endTime = new Date(parseAsIST(startTime).getTime() + (meeting.duration || 0) * 60000).toISOString();
   return { ...meeting, status: getMeetingStatus(startTime, endTime) };
 }
 
@@ -670,10 +671,18 @@ export async function deleteMeeting(meetingId) {
   }
 }
 
+function parseAsIST(dateTimeStr) {
+  if (!dateTimeStr) return new Date();
+  if (dateTimeStr.includes("+") || dateTimeStr.includes("Z") || (dateTimeStr.match(/-/g) || []).length > 2) {
+    return new Date(dateTimeStr);
+  }
+  return new Date(`${dateTimeStr}:00+05:30`);
+}
+
 function getMeetingStatus(startTime, endTime) {
   const now = new Date();
-  const start = new Date(startTime);
-  const end = new Date(endTime);
+  const start = parseAsIST(startTime);
+  const end = parseAsIST(endTime);
 
   if (now >= start && now <= end) {
     return "ongoing";
@@ -691,12 +700,12 @@ export async function getDashboardData() {
     listMeetings(),
   ]);
 
-  const today = new Date();
-  const todayStr = today.toLocaleDateString("en-CA"); // YYYY-MM-DD
-
   const todayMeetings = meetings.filter(m => {
-    const meetingDate = new Date(m.scheduleDateTime).toLocaleDateString("en-CA");
-    return meetingDate === todayStr;
+    const d1 = new Date();
+    const d2 = parseAsIST(m.scheduleDateTime);
+    return d1.getFullYear() === d2.getFullYear() &&
+           d1.getMonth() === d2.getMonth() &&
+           d1.getDate() === d2.getDate();
   });
 
   return {
