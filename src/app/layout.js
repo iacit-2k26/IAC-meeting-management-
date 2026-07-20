@@ -5,7 +5,7 @@ import ClientLayout from "@/components/layout/ClientLayout";
 import { AuthProvider } from "@/lib/AuthContext";
 
 export const metadata = {
-  title: "Zoom Meeting Management",
+  title: "IAC Meeting Central",
   description: "Enterprise Zoom Meeting Management Platform",
 };
 
