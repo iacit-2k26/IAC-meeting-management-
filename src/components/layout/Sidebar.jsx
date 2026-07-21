@@ -42,15 +42,22 @@ export default function Sidebar({ onNavigate, collapsed, setCollapsed }) {
   const showLabels = mobileOpen || isExpanded || !collapsed;
 
   const navItems = useMemo(
-    () => [
-      { label: "Dashboard",   icon: LayoutDashboard, href: "/dashboard"   },
-      { label: "Employees",   icon: Users,           href: "/employees"   },
-      { label: "Departments", icon: Building2,        href: "/departments" },
-      { label: "Meetings",    icon: Video,            href: "/meetings"    },
-      { label: "App Users",   icon: UserCog,          href: "/users"       },
-      { label: "Settings",    icon: Settings,         href: "/settings"    },
-    ],
-    []
+    () => {
+      const items = [
+        { label: "Dashboard",   icon: LayoutDashboard, href: "/dashboard"   },
+        { label: "Employees",   icon: Users,           href: "/employees"   },
+        { label: "Departments", icon: Building2,        href: "/departments" },
+        { label: "Meetings",    icon: Video,            href: "/meetings"    },
+        { label: "App Users",   icon: UserCog,          href: "/users", adminOnly: true },
+        { label: "Settings",    icon: Settings,         href: "/settings"    },
+      ];
+
+      if (user?.role !== "admin") {
+        return items.filter((item) => !item.adminOnly);
+      }
+      return items;
+    },
+    [user?.role]
   );
 
   useEffect(() => {

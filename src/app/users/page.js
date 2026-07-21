@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  CheckCircle2, Pencil, Plus, RefreshCw, Search, Shield, Trash2, User, UserPlus, Users, X,
+  CheckCircle2, Pencil, Plus, RefreshCw, Search, Shield, Trash2, User, UserPlus, Users, X, ShieldAlert,
 } from "lucide-react";
 import TruckLoader from "@/components/TruckLoader";
 import StatusBadge from "@/components/ui/StatusBadge";
@@ -11,6 +11,7 @@ import CustomSelect from "@/components/ui/CustomSelect";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
+import { useAuth } from "@/lib/AuthContext";
 
 const ROLES = ["user", "admin", "ceo", "hod", "mt_office"];
 
@@ -47,6 +48,7 @@ function RoleBadge({ role }) {
 }
 
 export default function UsersPage() {
+  const { user, loading: authLoading } = useAuth();
   const [users, setUsers] = useState([]);
   const [query, setQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -74,7 +76,13 @@ export default function UsersPage() {
     }
   };
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    if (user?.role === "admin") {
+      loadData();
+    } else {
+      setIsLoading(false);
+    }
+  }, [user?.role]);
 
   const filteredUsers = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -171,6 +179,26 @@ export default function UsersPage() {
   };
 
   const truncateUid = (uid) => uid ? uid.slice(0, 8) + "…" : "—";
+
+  if (!authLoading && user && user.role !== "admin") {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center p-6 text-center">
+        <div className="rounded-full bg-red-100 p-4 text-red-600 mb-4">
+          <ShieldAlert size={36} />
+        </div>
+        <h1 className="text-2xl font-bold text-slate-900">Access Restricted</h1>
+        <p className="mt-2 max-w-md text-sm text-slate-600">
+          Only system administrators can access and manage App Users. Please contact an admin if you need access.
+        </p>
+        <a
+          href="/dashboard"
+          className="mt-6 inline-flex items-center gap-2 rounded-xl bg-[#2B3990] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#232f77]"
+        >
+          Return to Dashboard
+        </a>
+      </div>
+    );
+  }
 
   return (
     <>

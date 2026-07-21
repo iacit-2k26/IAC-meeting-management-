@@ -6,15 +6,18 @@ import { verifyToken } from "@/lib/jwt";
 
 import { sendAccountActivatedEmail } from "@/lib/mailer";
 
-async function requireAuth(request) {
+async function requireAdmin(request) {
   const token = request.cookies.get("auth_session")?.value;
-  if (!token) return null;
-  return await verifyToken(token);
+  if (!token) return { error: "Unauthorized", status: 401 };
+  const payload = await verifyToken(token);
+  if (!payload) return { error: "Unauthorized", status: 401 };
+  if (payload.role !== "admin") return { error: "Forbidden: Admin access required", status: 403 };
+  return { payload };
 }
 
 export async function PUT(request, { params }) {
-  const payload = await requireAuth(request);
-  if (!payload) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireAdmin(request);
+  if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   try {
     const { id } = await params;
@@ -41,7 +44,12 @@ export async function PUT(request, { params }) {
     // Send account activation email if status changes from pending to active
     if (oldStatus === "pending" && newStatus === "active") {
       try {
-        await sendAccountActivatedEmail(user.email, user.fullName);
+        const originHeader = request.headers.get("origin");
+        const hostHeader = request.headers.get("host");
+        const protoHeader = request.headers.get("x-forwarded-proto") || "http";
+        const appBaseUrl = originHeader || (hostHeader ? `${protoHeader}://${hostHeader}` : null);
+
+        await sendAccountActivatedEmail(user.email, user.fullName, appBaseUrl);
       } catch (mailErr) {
         console.error("Failed to send activation email:", mailErr);
       }
@@ -54,8 +62,8 @@ export async function PUT(request, { params }) {
 }
 
 export async function DELETE(request, { params }) {
-  const payload = await requireAuth(request);
-  if (!payload) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireAdmin(request);
+  if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   try {
     const { id } = await params;

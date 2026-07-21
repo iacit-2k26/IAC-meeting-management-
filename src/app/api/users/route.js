@@ -4,15 +4,18 @@ import { ObjectId } from "mongodb";
 import bcrypt from "bcryptjs";
 import { verifyToken } from "@/lib/jwt";
 
-async function requireAuth(request) {
+async function requireAdmin(request) {
   const token = request.cookies.get("auth_session")?.value;
-  if (!token) return null;
-  return await verifyToken(token);
+  if (!token) return { error: "Unauthorized", status: 401 };
+  const payload = await verifyToken(token);
+  if (!payload) return { error: "Unauthorized", status: 401 };
+  if (payload.role !== "admin") return { error: "Forbidden: Admin access required", status: 403 };
+  return { payload };
 }
 
 export async function GET(request) {
-  const payload = await requireAuth(request);
-  if (!payload) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireAdmin(request);
+  if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   const db = await getDatabase();
   const users = await db.collection("users").find({}).sort({ createdAt: -1 }).toArray();
@@ -43,8 +46,8 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
-  const payload = await requireAuth(request);
-  if (!payload) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireAdmin(request);
+  if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   try {
     const body = await request.json();

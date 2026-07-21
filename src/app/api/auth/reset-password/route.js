@@ -42,8 +42,13 @@ export async function POST(request) {
       return NextResponse.json({ success: true }, { status: 200 });
     }
 
+    const originHeader = request.headers.get("origin");
+    const hostHeader = request.headers.get("host");
+    const protoHeader = request.headers.get("x-forwarded-proto") || "http";
+    const appBaseUrl = (originHeader || (hostHeader ? `${protoHeader}://${hostHeader}` : null) || process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "http://localhost:3000").replace(/\/$/, "");
+
     const resetToken = await createResetToken(user._id.toString(), user.email);
-    const resetLink = `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/reset-password?token=${resetToken}`;
+    const resetLink = `${appBaseUrl}/reset-password?token=${resetToken}`;
 
     await sendPasswordResetEmail(user.email, resetLink);
 

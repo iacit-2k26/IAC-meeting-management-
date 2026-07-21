@@ -380,7 +380,7 @@ This link will expire in 1 hour for security reasons.`,
 /**
  * Send an account activation email when admin approves the user.
  */
-export async function sendAccountActivatedEmail(toEmail, fullName) {
+export async function sendAccountActivatedEmail(toEmail, fullName, baseUrl = null) {
   const transporter = createTransporter();
 
   try {
@@ -389,6 +389,8 @@ export async function sendAccountActivatedEmail(toEmail, fullName) {
     console.error("[Mailer] SMTP connection failed:", err.message);
     throw new Error("SMTP connection failed. Check SMTP_HOST, SMTP_USER, SMTP_PASSWORD in .env");
   }
+
+  const appBaseUrl = (baseUrl || process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "");
 
   await transporter.sendMail({
     from: `"IAC Meeting Management" <${process.env.SMTP_USER}>`,
@@ -400,7 +402,7 @@ export async function sendAccountActivatedEmail(toEmail, fullName) {
   <p>Hi ${fullName},</p>
   <p>Good news! Your account on **IAC Meeting Central** has been approved and activated by the administrator.</p>
   <p>You can now log in using your registered email and password to access the dashboard and manage meetings.</p>
-  <p style="margin-top: 24px;"><a href="${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/login" style="display: inline-block; padding: 12px 24px; background-color: #2B3990; color: white; text-decoration: none; border-radius: 6px; font-weight: bold;">Log In Now</a></p>
+  <p style="margin-top: 24px;"><a href="${appBaseUrl}/login" style="display: inline-block; padding: 12px 24px; background-color: #2B3990; color: white; text-decoration: none; border-radius: 6px; font-weight: bold;">Log In Now</a></p>
   <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
   <p style="font-size: 12px; color: #64748b;">This email was sent automatically. If you did not register for an account, please ignore this email.</p>
 </div>`,
@@ -409,7 +411,7 @@ export async function sendAccountActivatedEmail(toEmail, fullName) {
 Good news! Your account on IAC Meeting Central has been approved and activated by the administrator.
 
 You can now log in using your registered email and password:
-${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/login
+${appBaseUrl}/login
 
 Thank you,
 IAC Meeting Management Team`,
